@@ -575,12 +575,12 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
         {!autoScroll && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-40 right-6 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-theme-500 text-black font-mono font-bold text-xs sm:text-sm shadow-xl shadow-theme-500/30 hover:bg-theme-400 transition-all animate-bounce"
+            className="absolute bottom-40 right-6 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-600 text-white font-mono font-bold text-xs sm:text-sm shadow-xl shadow-purple-600/40 hover:bg-purple-500 transition-all animate-bounce"
           >
             <ArrowDownCircle className="w-4 h-4" />
             <span>Bottom</span>
             {unreadCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-black text-white text-[10px]">
+              <span className="px-1.5 py-0.5 rounded-full bg-black/60 text-white text-[10px]">
                 +{unreadCount}
               </span>
             )}
@@ -630,7 +630,7 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
           <button
             type="submit"
             disabled={!command.trim()}
-            className="min-h-[46px] px-5 sm:px-6 py-2 rounded-xl font-mono text-xs sm:text-sm font-bold text-black bg-theme-500 hover:bg-theme-400 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-lg shadow-theme-500/20 shrink-0 flex items-center gap-2"
+            className="min-h-[46px] px-5 sm:px-6 py-2 rounded-xl font-mono text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-lg shadow-purple-600/30 shrink-0 flex items-center gap-2"
           >
             <Send className="w-4 h-4" />
             <span className="hidden sm:inline">Send</span>

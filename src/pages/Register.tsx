@@ -3,9 +3,9 @@ import React, { useState } from "react";
 import { LoadingOverlay } from "../components/LoadingOverlay";
 import { useSettings } from "../context/SettingsContext";
 import { useNavigate, Link } from "react-router-dom";
-import { Server, ArrowRight, Mail, Lock, User } from "lucide-react";
+import { Server, ArrowRight, Lock, User, CheckCircle } from "lucide-react";
 import axios from "axios";
-import { motion } from "framer-motion";
+import "./Login.css";
 
 export default function Register() {
   const [username, setUsername] = useState("");
@@ -14,7 +14,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const { panelName, panelLogo, enableRegistration } = useSettings();
   const navigate = useNavigate();
 
@@ -51,150 +51,136 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-background text-foreground selection:bg-theme-600/30">
-      {/* Left side - Visual */}
-      <div className="hidden lg:flex w-1/2 bg-card relative overflow-hidden items-center justify-center border-r border-border">
-        {/* Subtle background glow effect */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-full max-h-[800px] bg-theme-600/10 blur-[120px] rounded-full pointer-events-none" />
-        
-        <div className="relative z-10 max-w-lg p-12 text-right">
-          <div className="w-16 h-16 rounded-2xl bg-theme-600/10 border border-theme-600/20 flex items-center justify-center mb-8 ml-auto">
-            <Server className="w-8 h-8 text-theme-500" />
-          </div>
-          <h2 className="text-4xl font-bold mb-6 leading-tight">Join the next generation of hosting.</h2>
-          <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-            Create an account to start deploying high-performance game servers instantly.
-          </p>
-          
-          <div className="grid grid-cols-2 gap-4 text-left">
-            <div className="p-4 rounded-xl bg-background/50 border border-border-subtle backdrop-blur-sm">
-              <div className="font-bold text-lg text-foreground mb-1">Instant Setup</div>
-              <div className="text-xs text-muted-foreground">Servers deploy in seconds</div>
+    <div className="nb-login-wrapper">
+      {/* Animated background grid */}
+      <div className="nb-login-grid" />
+
+      {/* Floating orbs */}
+      <div className="nb-login-orb nb-login-orb-1" />
+      <div className="nb-login-orb nb-login-orb-2" />
+
+      {/* Registration Card */}
+      <div className="nb-login-card">
+        {/* Header Logo & Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", marginBottom: "1.75rem" }}>
+          {panelLogo ? (
+            <img
+              src={panelLogo}
+              alt="Logo"
+              style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "contain" }}
+            />
+          ) : (
+            <div className="nb-login-logo">
+              <Server size={20} color="#a78bfa" />
             </div>
-            <div className="p-4 rounded-xl bg-background/50 border border-border-subtle backdrop-blur-sm">
-              <div className="font-bold text-lg text-foreground mb-1">Full Control</div>
-              <div className="text-xs text-muted-foreground">Console, files & advanced config</div>
-            </div>
+          )}
+          <div>
+            <h1 className="nb-login-title">{panelName || "zPanel"}</h1>
+            <p className="nb-login-subtitle">Create your account</p>
           </div>
         </div>
-        
-        {/* Decorative elements */}
-        <div className="absolute right-0 top-0 w-64 h-64 bg-theme-800/5 blur-[100px] rounded-full" />
-        <div className="absolute left-0 bottom-0 w-64 h-64 bg-theme-600/5 blur-[100px] rounded-full" />
+
+        {/* Disabled warning */}
+        {enableRegistration === false && (
+          <div className="nb-login-error" style={{ background: "rgba(245, 158, 11, 0.1)", borderColor: "rgba(245, 158, 11, 0.3)", color: "#fbbf24" }}>
+            User registration is currently disabled by administrator.
+          </div>
+        )}
+
+        {/* Error */}
+        {error && <div className="nb-login-error">{error}</div>}
+
+        {/* Success */}
+        {success && (
+          <div
+            style={{
+              padding: "0.625rem 0.875rem",
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              borderRadius: "0.5rem",
+              color: "#34d399",
+              fontSize: "0.8125rem",
+              marginBottom: "1rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <CheckCircle size={16} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleRegister} autoComplete="off">
+          <div className="nb-login-input-wrap">
+            <label className="nb-login-label">Username</label>
+            <div style={{ position: "relative" }}>
+              <User className="nb-login-input-icon" />
+              <input
+                type="text"
+                name="username"
+                required
+                placeholder="Choose a username"
+                className="nb-login-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+          </div>
+
+          <div className="nb-login-input-wrap">
+            <label className="nb-login-label">Password</label>
+            <div style={{ position: "relative" }}>
+              <Lock className="nb-login-input-icon" />
+              <input
+                type="password"
+                name="password"
+                required
+                placeholder="At least 6 characters"
+                className="nb-login-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <div className="nb-login-input-wrap">
+            <label className="nb-login-label">Confirm Password</label>
+            <div style={{ position: "relative" }}>
+              <Lock className="nb-login-input-icon" />
+              <input
+                type="password"
+                name="confirmPassword"
+                required
+                placeholder="Repeat your password"
+                className="nb-login-input"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="nb-login-btn"
+            disabled={isLoading || !!success || enableRegistration === false}
+          >
+            {isLoading ? "Creating account…" : "Create Account"}
+          </button>
+        </form>
+
+        <div className="nb-login-footer">
+          Already have an account?{" "}
+          <Link to="/login">Sign in</Link>
+        </div>
       </div>
 
-      {/* Right side - Register Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-24 relative z-10">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-sm mx-auto"
-        >
-          <div className="flex items-center gap-3 mb-10">
-            {panelLogo ? (
-              <img src={panelLogo} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-theme-700 flex items-center justify-center text-white shadow-lg">
-                <Server size={20} />
-              </div>
-            )}
-            <h1 className="text-2xl font-bold tracking-tight">{panelName}</h1>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold tracking-tight mb-2">Create account</h2>
-            <p className="text-muted-foreground">Sign up to start managing your servers.</p>
-          </div>
-
-          <form onSubmit={handleRegister} className="space-y-5">
-            {enableRegistration === false && (
-              <div className="p-3 bg-theme-600/10 border border-theme-600/20 text-theme-500 text-sm rounded-lg">
-                User registration is currently disabled by administrator.
-              </div>
-            )}
-            {error && (
-              <div className="p-3 bg-theme-500/10 border border-theme-500/20 text-theme-400 text-sm rounded-lg">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="p-3 bg-theme-600/10 border border-theme-600/20 text-theme-500 text-sm rounded-lg">
-                {success}
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Username</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                <input 
-                  type="text" 
-                  name="username"
-                  required
-                  placeholder="Choose a username"
-                  className="w-full bg-card border border-border focus:border-theme-600 focus:ring-1 focus:ring-theme-600 rounded-xl py-3 pl-10 pr-4 outline-none transition-all"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Password</label>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                <input 
-                  type="password" 
-                  name="password"
-                  required
-                  placeholder="••••••••"
-                  className="w-full bg-card border border-border focus:border-theme-600 focus:ring-1 focus:ring-theme-600 rounded-xl py-3 pl-10 pr-4 outline-none transition-all"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Confirm Password</label>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                <input 
-                  type="password" 
-                  name="confirmPassword"
-                  required
-                  placeholder="••••••••"
-                  className="w-full bg-card border border-border focus:border-theme-600 focus:ring-1 focus:ring-theme-600 rounded-xl py-3 pl-10 pr-4 outline-none transition-all"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={isLoading || !!success || enableRegistration === false}
-              className="w-full flex items-center justify-center gap-2 bg-theme-700 hover:bg-indigo-700 text-white py-3 px-4 rounded-xl font-medium transition-all shadow-lg shadow-theme-600/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 mt-2"
-            >
-              {isLoading ? "Creating account..." : "Create account"}
-              {!isLoading && <ArrowRight size={18} />}
-            </button>
-          </form>
-          
-          <div className="mt-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              Already have an account? <Link to="/login" className="text-theme-500 hover:text-theme-300 font-medium transition-colors">Sign in</Link>
-            </p>
-          </div>
-        </motion.div>
-      </div>
-
-      {isLoading && <LoadingOverlay message="Processing..." />}
+      {isLoading && <LoadingOverlay message="Processing…" />}
     </div>
   );
 }
+

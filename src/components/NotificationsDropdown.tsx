@@ -150,13 +150,13 @@ export default function NotificationsDropdown() {
 
       {/* Notifications Panel Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-panel backdrop-blur-2xl border border-line shadow-2xl rounded overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[rgba(10,14,36,0.96)] backdrop-blur-2xl border border-[rgba(139,92,246,0.25)] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8),0_0_40px_-10px_rgba(124,58,237,0.3)] rounded-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
           {/* Header */}
-          <div className="p-4 border-b border-border/60 flex items-center justify-between">
+          <div className="p-4 border-b border-[rgba(139,92,246,0.18)] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-sm text-foreground">Notifications</h3>
+              <h3 className="font-bold text-sm text-[#f0f4ff]">Notifications</h3>
               {unreadCount > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-theme-600/20 text-theme-500 border border-theme-600/30">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-[#a78bfa] border border-purple-500/30">
                   {unreadCount} new
                 </span>
               )}
@@ -165,7 +165,7 @@ export default function NotificationsDropdown() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="text-xs text-muted-foreground hover:text-theme-500 transition-colors flex items-center gap-1"
+                  className="text-xs text-[#94a3b8] hover:text-[#a78bfa] transition-colors flex items-center gap-1"
                   title="Mark all as read"
                 >
                   <Check size={12} />
@@ -175,7 +175,7 @@ export default function NotificationsDropdown() {
               {notifications.length > 0 && (
                 <button
                   onClick={clearAll}
-                  className="text-xs text-muted-foreground hover:text-theme-400 transition-colors p-1 rounded-md hover:bg-muted"
+                  className="text-xs text-[#64748b] hover:text-rose-400 transition-colors p-1 rounded-lg hover:bg-white/5"
                   title="Clear all notifications"
                 >
                   <Trash2 size={13} />
@@ -185,23 +185,23 @@ export default function NotificationsDropdown() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex items-center px-4 pt-2 pb-1 border-b border-border/40 gap-2 bg-muted/30">
+          <div className="flex items-center px-4 pt-2.5 pb-2 border-b border-[rgba(139,92,246,0.12)] gap-2 bg-[rgba(6,9,26,0.5)]">
             <button
               onClick={() => setFilter("all")}
-              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-all ${
                 filter === "all"
-                  ? "bg-theme-600/20 text-theme-300 border border-theme-600/30"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-purple-600/20 text-[#a78bfa] border border-purple-500/30"
+                  : "text-[#64748b] hover:text-[#94a3b8]"
               }`}
             >
               All ({notifications.length})
             </button>
             <button
               onClick={() => setFilter("unread")}
-              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-all ${
                 filter === "unread"
-                  ? "bg-theme-600/20 text-theme-300 border border-theme-600/30"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-purple-600/20 text-[#a78bfa] border border-purple-500/30"
+                  : "text-[#64748b] hover:text-[#94a3b8]"
               }`}
             >
               Unread ({unreadCount})

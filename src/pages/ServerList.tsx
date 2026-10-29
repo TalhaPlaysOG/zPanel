@@ -1,14 +1,4 @@
 // @ts-nocheck
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  ServerList · Fleet grid with live status and per-server metrics           ║
-// ║                                                                            ║
-// ║  STEP 1 · Imports          STEP 5 · Primitives (StatusBadge, Metric)       ║
-// ║  STEP 2 · Types            STEP 6 · ServerCard                             ║
-// ║  STEP 3 · Constants        STEP 7 · Sections (Loading, Empty)             ║
-// ║  STEP 4 · Data hook        STEP 8 · Page composition                       ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
-
-/* ── STEP 1 · Imports ─────────────────────────────────────────────────────── */
 import {
   memo,
   useCallback,
@@ -25,7 +15,6 @@ import { motion, type Variants } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import ServerLiveStats from "../components/ServerLiveStats";
 
-/* ── STEP 2 · Types ───────────────────────────────────────────────────────── */
 type ServerStatus = "online" | "offline" | (string & {});
 
 interface ServerRecord {
@@ -45,12 +34,10 @@ interface ServersState {
   isLoading: boolean;
 }
 
-/* ── STEP 3 · Constants ───────────────────────────────────────────────────── */
 const EASE = [0.22, 1, 0.36, 1] as const;
 const POLL_INTERVAL_MS = 5_000;
 const DEFAULT_CPU = 100;
 const DEFAULT_DISK = 10;
-const SURFACE = "transparent"; // Changed to transparent so global background shows
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -67,8 +54,6 @@ const itemVariants: Variants = {
 
 const isOnline = (status?: ServerStatus): boolean => status === "online";
 
-/* ── STEP 4 · Data hook (fetch + poll) ────────────────────────────────────── */
-/** Fetches the server fleet and re-polls on a fixed interval with cleanup. */
 function useServers(pollIntervalMs = POLL_INTERVAL_MS): ServersState {
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +89,6 @@ function useServers(pollIntervalMs = POLL_INTERVAL_MS): ServersState {
   return { servers, error, isLoading };
 }
 
-/* ── STEP 5 · Primitives ──────────────────────────────────────────────────── */
 const StatusBadge = memo(function StatusBadge({
   status,
 }: {
@@ -113,19 +97,19 @@ const StatusBadge = memo(function StatusBadge({
   const online = isOnline(status);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${
         online
-          ? "bg-theme-600/10 text-theme-500 ring-1 ring-inset ring-theme-600/20"
-          : "bg-muted text-muted-foreground ring-1 ring-inset ring-border"
+          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_-2px_rgba(16,185,129,0.3)]"
+          : "bg-slate-800/60 text-[#94a3b8] border border-[rgba(139,92,246,0.15)]"
       }`}
     >
-      <span className="relative flex h-1.5 w-1.5">
+      <span className="relative flex h-2 w-2">
         {online && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-theme-500/80 motion-reduce:hidden" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
         )}
         <span
-          className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-            online ? "bg-theme-500" : "bg-zinc-500"
+          className={`relative inline-flex h-2 w-2 rounded-full ${
+            online ? "bg-emerald-400" : "bg-slate-500"
           }`}
         />
       </span>
@@ -134,21 +118,19 @@ const StatusBadge = memo(function StatusBadge({
   );
 });
 
-/** Labeled metric cell used inside a server card. */
 function Metric({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
         {label}
       </p>
-      <div className="font-mono text-sm font-semibold text-foreground">
+      <div className="font-mono text-sm font-semibold text-[#f0f4ff]">
         {children}
       </div>
     </div>
   );
 }
 
-/* ── STEP 6 · ServerCard ──────────────────────────────────────────────────── */
 const ServerCard = memo(function ServerCard({
   server,
 }: {
@@ -159,28 +141,29 @@ const ServerCard = memo(function ServerCard({
 
   const content = (
     <>
-      {/* 6.1 · Status edge-light */}
+      {/* Status top edge light */}
       <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-px ${
+        className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
           online
-            ? "bg-gradient-to-r from-transparent via-theme-500/60 to-transparent"
-            : "bg-gradient-to-r from-transparent via-white/15 to-transparent"
+            ? "bg-gradient-to-r from-transparent via-emerald-500/70 to-transparent"
+            : "bg-gradient-to-r from-transparent via-purple-500/30 to-transparent"
         }`}
       />
-      {/* 6.2 · Header */}
+
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground transition-colors group-hover:border-border-strong group-hover:text-foreground">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[rgba(139,92,246,0.25)] bg-[rgba(124,58,237,0.12)] text-[#a78bfa] shadow-[0_0_16px_-4px_rgba(124,58,237,0.3)] transition-colors group-hover:border-[rgba(139,92,246,0.45)] group-hover:text-white">
             <Server className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
+            <h2 className="truncate text-base sm:text-lg font-bold tracking-tight text-[#f0f4ff] group-hover:text-white transition-colors">
               {server.name}
             </h2>
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-1 flex items-center gap-2">
               <StatusBadge status={server.status} />
               {isSuspended && (
-                <span className="inline-flex items-center gap-1 rounded-md border border-theme-500/20 bg-theme-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-theme-400 uppercase">
+                <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-400 uppercase">
                   <Lock className="h-3 w-3" />
                   Suspended
                 </span>
@@ -189,14 +172,15 @@ const ServerCard = memo(function ServerCard({
           </div>
         </div>
         {!isSuspended && (
-          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-foreground-muted" />
+          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-[#64748b] transition-all group-hover:translate-x-1 group-hover:text-[#a78bfa]" />
         )}
       </div>
-      {/* 6.3 · Metrics */}
-      <div className="mt-5 grid grid-cols-2 gap-4 rounded-xl border border-border-subtle bg-muted px-4 py-4 sm:grid-cols-4">
+
+      {/* Metrics */}
+      <div className="mt-4 grid grid-cols-2 gap-3.5 rounded-xl border border-[rgba(139,92,246,0.12)] bg-[rgba(6,9,26,0.6)] px-4 py-3 sm:grid-cols-4">
         <Metric label="CPU Limit">
           {server.cpu ?? DEFAULT_CPU}
-          <span className="ml-0.5 text-muted-foreground">%</span>
+          <span className="ml-0.5 text-xs text-[#64748b]">%</span>
         </Metric>
         <Metric label="RAM Usage">
           <ServerLiveStats
@@ -207,7 +191,7 @@ const ServerCard = memo(function ServerCard({
         </Metric>
         <Metric label="Disk Limit">
           {server.disk ?? DEFAULT_DISK}
-          <span className="ml-0.5 text-muted-foreground">GB</span>
+          <span className="ml-0.5 text-xs text-[#64748b]">GB</span>
         </Metric>
         <Metric label="Version">
           <span className="block truncate" title={server.version}>
@@ -221,13 +205,13 @@ const ServerCard = memo(function ServerCard({
   return (
     <motion.article variants={itemVariants}>
       {isSuspended ? (
-        <div className="group relative block overflow-hidden rounded-2xl border border-theme-500/10 bg-black/40 dark:bg-black/40 p-5 opacity-75 md:p-6 cursor-not-allowed">
+        <div className="group relative block overflow-hidden rounded-2xl border border-[rgba(239,68,68,0.2)] bg-[rgba(10,14,36,0.7)] p-5 opacity-70 md:p-6 cursor-not-allowed">
           {content}
         </div>
       ) : (
         <Link
           to={`/servers/${server.id}`}
-          className="group relative block overflow-hidden rounded-2xl border border-border-subtle bg-muted-subtle p-5 transition-colors duration-200 hover:border-border-strong hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 md:p-6"
+          className="group relative block overflow-hidden rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.65)] backdrop-blur-xl p-5 transition-all duration-200 hover:border-[rgba(139,92,246,0.4)] hover:bg-[rgba(15,21,53,0.85)] hover:shadow-[0_8px_30px_-6px_rgba(0,0,0,0.6),0_0_25px_-5px_rgba(124,58,237,0.25)] md:p-6"
         >
           {content}
         </Link>
@@ -236,18 +220,14 @@ const ServerCard = memo(function ServerCard({
   );
 });
 
-/* ── STEP 7 · Sections ────────────────────────────────────────────────────── */
 function LoadingState() {
   return (
-    <div
-      className="flex min-h-[50vh] flex-col items-center justify-center gap-4"
-      
-    >
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
       <div
-        className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-white/70"
+        className="h-10 w-10 animate-spin rounded-full border-2 border-[rgba(139,92,246,0.2)] border-t-[#8b5cf6]"
         aria-hidden
       />
-      <p className="text-sm font-medium text-muted-foreground">Loading instances…</p>
+      <p className="text-sm font-medium text-[#94a3b8]">Loading server fleet…</p>
     </div>
   );
 }
@@ -256,90 +236,92 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <motion.div
       variants={itemVariants}
-      className="col-span-full flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted-subtle px-6 py-24 text-center"
+      className="col-span-full flex flex-col items-center justify-center rounded-2xl border border-dashed border-[rgba(139,92,246,0.2)] bg-[rgba(10,14,36,0.6)] px-6 py-20 text-center"
     >
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl border border-border bg-muted">
-        <Server className="h-6 w-6 text-muted-foreground" />
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[rgba(139,92,246,0.3)] bg-[rgba(124,58,237,0.12)] text-[#a78bfa] shadow-[0_0_24px_-4px_rgba(124,58,237,0.4)]">
+        <Server className="h-8 w-8" />
       </div>
-      <h3 className="text-base font-semibold text-foreground">
-        No instances running
+      <h3 className="text-lg font-bold text-[#f0f4ff]">
+        No server instances deployed
       </h3>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-        You haven&apos;t deployed any servers yet. Create one to start managing
-        your game instances.
+      <p className="mt-1 max-w-sm text-sm text-[#94a3b8]">
+        You haven&apos;t deployed any game servers yet. Deploy an instance to start managing console, files, and players.
       </p>
       {isAdmin && (
         <Link
           to="/servers/create"
-          className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--btn-primary-bg)] px-4 text-sm font-semibold text-[var(--btn-primary-text)] transition-colors hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070708]"
+          className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-5 text-sm font-bold text-white shadow-[0_0_20px_-4px_rgba(124,58,237,0.6)] transition-all active:scale-95"
         >
           <Plus className="h-4 w-4" />
-          Deploy your first server
+          Deploy First Server
         </Link>
       )}
     </motion.div>
   );
 }
 
-/* ── STEP 8 · Page composition ────────────────────────────────────────────── */
 export default function ServerList() {
   const { user } = useAuth();
   const { servers, error, isLoading } = useServers();
 
-  // 8.1 · Gating — resolve auth BEFORE making any role decision.
-  //        `user` is undefined while auth is still restoring; null when logged
-  //        out; an object once resolved. Gating on this prevents admin controls
-  //        from flickering in/out on first paint.
-  //        If your AuthContext exposes an explicit flag instead (e.g. `loading`
-  //        or `isReady`), swap the line below for: const isAuthReady = !loading;
   const isAuthReady = user !== undefined;
-  const isAdmin = isAuthReady && user?.role === "admin";
+  const isAdmin = isAuthReady && (user?.role === "admin" || user?.role === "owner");
   const hasServers = servers.length > 0;
 
-  // 8.2 · Live "X of Y online" summary.
   const onlineCount = useMemo(
     () => servers.reduce((n, s) => n + (isOnline(s.status) ? 1 : 0), 0),
     [servers],
   );
 
-  // 8.3 · First paint: wait for auth readiness AND the initial data load.
   if (!isAuthReady || (isLoading && !hasServers)) return <LoadingState />;
 
-  // 8.4 · Full page.
   return (
-    <div
-      className="relative "
-      style={{ backgroundColor: SURFACE }}
-    >
-      <div className="relative mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-10">
+    <div className="relative">
+      <div className="relative mx-auto max-w-7xl">
         <PageHeader 
           title="Instances" 
           subtitle="INFRASTRUCTURE" 
           actions={
             isAdmin && (
-              <>
-                <Link to="/admin/servers" className="btn-outline px-4 py-2 text-xs">
-                  <Settings className="w-4 h-4 mr-2 inline-block" /> Manage
+              <div className="flex items-center gap-2.5">
+                <Link
+                  to="/admin/servers"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-[rgba(139,92,246,0.22)] bg-[rgba(6,9,26,0.6)] text-[#94a3b8] hover:text-[#f0f4ff] hover:border-[rgba(139,92,246,0.4)] transition-all"
+                >
+                  <Settings className="w-3.5 h-3.5" /> Manage Fleet
                 </Link>
-                <Link to="/servers/create" className="btn-primary px-4 py-2 text-xs">
-                  <Plus className="w-4 h-4 mr-2 inline-block" /> New Instance
+                <Link
+                  to="/servers/create"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-[0_0_20px_-4px_rgba(124,58,237,0.6)] transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" /> New Instance
                 </Link>
-              </>
+              </div>
             )
           }
         />
 
-        {/* 8.4b · Error banner */}
+        {/* Online summary pill */}
+        {hasServers && (
+          <div className="mb-5 flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[rgba(10,14,36,0.7)] border border-[rgba(139,92,246,0.18)] text-xs text-[#94a3b8]">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <strong className="text-[#f0f4ff] font-mono">{onlineCount}</strong> of <strong className="text-[#f0f4ff] font-mono">{servers.length}</strong> online
+            </span>
+          </div>
+        )}
+
+        {/* Error banner */}
         {error && (
           <div
             role="alert"
-            className="mb-6 rounded-xl border border-theme-500/20 bg-theme-500/[0.08] px-4 py-3 text-sm font-medium text-theme-300"
+            className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-300"
           >
             {error}
           </div>
         )}
 
-        {/* 8.4c · Fleet */}
+        {/* Fleet Grid */}
         <motion.section
           variants={containerVariants}
           initial="hidden"

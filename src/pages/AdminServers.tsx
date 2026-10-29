@@ -3,7 +3,7 @@ import PageHeader from "../components/PageHeader";
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import { Server, Settings, Search, Trash2, Edit2, Play, Square, PauseCircle, MoreVertical, ChevronRight } from "lucide-react";
+import { Server, Settings, Search, Trash2, Edit2, Play, Square, PauseCircle, MoreVertical, ChevronRight, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -90,18 +90,19 @@ export default function AdminServers() {
   );
 
   return (
-    <div className="w-full relative z-10">
+    <div className="w-full relative z-10 space-y-6">
       <PageHeader 
         title="Manage Servers" 
         subtitle="FLEET ADMINISTRATION" 
       />
 
-      <div className="bg-muted border border-border rounded-xl p-4 mb-6 flex items-center">
-        <Search className="w-5 h-5 text-muted-foreground mr-3" />
+      {/* Search Bar */}
+      <div className="bg-[rgba(15,21,53,0.7)] border border-[rgba(139,92,246,0.18)] rounded-2xl p-3.5 flex items-center shadow-lg backdrop-blur-xl">
+        <Search className="w-5 h-5 text-[#64748b] ml-1 mr-3" />
         <input 
           type="text"
-          placeholder="Search servers by name or ID..."
-          className="bg-transparent outline-none flex-1 text-foreground"
+          placeholder="Search fleet by server name or UUID..."
+          className="bg-transparent outline-none flex-1 text-[#f0f4ff] placeholder-[#64748b] text-sm"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -109,27 +110,35 @@ export default function AdminServers() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="w-10 h-10 border-2 border-theme-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {filteredServers.map(server => (
-            <div key={server.id} className="bg-muted border border-border rounded-xl p-5 flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-theme-600/10 rounded-lg flex items-center justify-center border border-theme-600/20">
-                  <Server className="text-theme-500 w-6 h-6" />
+            <div 
+              key={server.id} 
+              className="bg-[rgba(15,21,53,0.7)] border border-[rgba(139,92,246,0.18)] hover:border-[rgba(139,92,246,0.35)] rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 transition-all shadow-[0_8px_30px_-6px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+            >
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="w-12 h-12 bg-purple-600/15 rounded-xl flex items-center justify-center border border-purple-500/30 text-[#a78bfa] shadow-[0_0_15px_rgba(124,58,237,0.3)] shrink-0">
+                  <Server className="w-6 h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg">{server.name}</h3>
-                  <div className="flex gap-3 text-sm text-muted-foreground mt-1">
-                    <span>{server.type} • {server.version}</span>
-                    <span>Owner: {getUsername(server.owner)}</span>
-                    {server.suspended && <span className="text-theme-400 font-bold ml-2">SUSPENDED</span>}
+                <div className="min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg text-[#f0f4ff] truncate">{server.name}</h3>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[#94a3b8] mt-1">
+                    <span className="font-mono">{server.type} • {server.version}</span>
+                    <span>•</span>
+                    <span>Owner: <strong className="text-[#f0f4ff]">{getUsername(server.owner)}</strong></span>
+                    {server.suspended && (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold uppercase text-[10px]">
+                        SUSPENDED
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
                 <ActionMenu 
                   server={server} 
                   setEditingServer={setEditingServer} 
@@ -142,17 +151,17 @@ export default function AdminServers() {
                 />
                 <Link 
                   to={`/servers/${server.id}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-theme-600 hover:bg-theme-700 text-foreground rounded-lg transition-colors sm:ml-2 border border-theme-500/20 text-sm font-medium shadow-md shadow-theme-600/20"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all text-xs font-bold shadow-[0_0_15px_rgba(124,58,237,0.5)] active:scale-95"
                 >
-                  <span className="hidden sm:inline">Console</span>
+                  <span>Console</span>
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>
             </div>
           ))}
           {filteredServers.length === 0 && (
-            <div className="text-center py-10 text-muted-foreground">
-              No servers found matching your search.
+            <div className="text-center py-12 text-[#94a3b8] bg-[rgba(15,21,53,0.4)] rounded-2xl border border-[rgba(139,92,246,0.1)]">
+              No servers found matching your query.
             </div>
           )}
         </div>
@@ -161,32 +170,58 @@ export default function AdminServers() {
       {/* Edit Resources Modal */}
       <AnimatePresence>
         {editingServer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#121214] border border-border rounded-2xl p-6 max-w-md w-full"
+              className="bg-[rgba(10,14,36,0.95)] border border-[rgba(139,92,246,0.3)] rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8),0_0_40px_-10px_rgba(124,58,237,0.3)] relative overflow-hidden"
             >
-              <h2 className="text-xl font-bold mb-4">Edit Resources for {editingServer.name}</h2>
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 to-indigo-500" />
+              
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-[#f0f4ff]">Edit Resources: {editingServer.name}</h2>
+                <button onClick={() => setEditingServer(null)} className="p-1 text-[#64748b] hover:text-white rounded-lg">
+                  <X size={16} />
+                </button>
+              </div>
+
               <form onSubmit={handleUpdateResources}>
                 <div className="space-y-4 mb-6">
                   <div>
-                    <label className="block text-sm text-muted-foreground mb-1">RAM (GB)</label>
-                    <input type="number" value={ram} onChange={e => setRam(e.target.value)} required min="1" className="w-full bg-muted border border-border rounded-lg p-2 text-foreground outline-none" />
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-1.5">RAM (GB)</label>
+                    <input 
+                      type="number" 
+                      value={ram} 
+                      onChange={e => setRam(e.target.value)} 
+                      required min="1" 
+                      className="w-full bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl px-3.5 py-2 text-sm text-white font-mono outline-none" 
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm text-muted-foreground mb-1">CPU (%)</label>
-                    <input type="number" value={cpu} onChange={e => setCpu(e.target.value)} required min="50" className="w-full bg-muted border border-border rounded-lg p-2 text-foreground outline-none" />
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-1.5">CPU (%)</label>
+                    <input 
+                      type="number" 
+                      value={cpu} 
+                      onChange={e => setCpu(e.target.value)} 
+                      required min="50" 
+                      className="w-full bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl px-3.5 py-2 text-sm text-white font-mono outline-none" 
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm text-muted-foreground mb-1">Disk (GB)</label>
-                    <input type="number" value={disk} onChange={e => setDisk(e.target.value)} required min="1" className="w-full bg-muted border border-border rounded-lg p-2 text-foreground outline-none" />
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-1.5">Disk (GB)</label>
+                    <input 
+                      type="number" 
+                      value={disk} 
+                      onChange={e => setDisk(e.target.value)} 
+                      required min="1" 
+                      className="w-full bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl px-3.5 py-2 text-sm text-white font-mono outline-none" 
+                    />
                   </div>
                 </div>
                 <div className="flex justify-end gap-3">
-                  <button type="button" onClick={() => setEditingServer(null)} className="px-4 py-2 bg-muted hover:bg-muted-hover rounded-lg">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold">Save Changes</button>
+                  <button type="button" onClick={() => setEditingServer(null)} className="px-4 py-2 text-xs font-semibold text-[#94a3b8] hover:text-white">Cancel</button>
+                  <button type="submit" className="px-5 py-2 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-[0_0_15px_rgba(124,58,237,0.5)]">Save Changes</button>
                 </div>
               </form>
             </motion.div>
@@ -197,21 +232,29 @@ export default function AdminServers() {
       {/* Suspend Modal */}
       <AnimatePresence>
         {suspendingServer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#121214] border border-border rounded-2xl p-6 max-w-md w-full"
+              className="bg-[rgba(10,14,36,0.95)] border border-[rgba(139,92,246,0.3)] rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8),0_0_40px_-10px_rgba(124,58,237,0.3)] relative overflow-hidden"
             >
-              <h2 className="text-xl font-bold mb-4">Manage Suspension for {suspendingServer.name}</h2>
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500 to-purple-500" />
+              
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-[#f0f4ff]">Manage Suspension: {suspendingServer.name}</h2>
+                <button onClick={() => setSuspendingServer(null)} className="p-1 text-[#64748b] hover:text-white rounded-lg">
+                  <X size={16} />
+                </button>
+              </div>
+
               <form onSubmit={handleUpdateSuspend}>
                 <div className="mb-6">
-                  <label className="block text-sm text-muted-foreground mb-2">Suspension Duration</label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-2">Suspension Duration</label>
                   <select 
                     value={suspendDuration} 
                     onChange={e => setSuspendDuration(e.target.value)}
-                    className="w-full bg-muted border border-border rounded-lg p-3 text-foreground outline-none"
+                    className="w-full bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl px-3.5 py-2.5 text-sm text-white outline-none"
                   >
                     <option value="null">Not Suspended (Active)</option>
                     <option value="24_hours">24 Hours</option>
@@ -222,8 +265,8 @@ export default function AdminServers() {
                   </select>
                 </div>
                 <div className="flex justify-end gap-3">
-                  <button type="button" onClick={() => setSuspendingServer(null)} className="px-4 py-2 bg-muted hover:bg-muted-hover rounded-lg">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-amber-600 hover:bg-theme-600 rounded-lg font-bold">Apply</button>
+                  <button type="button" onClick={() => setSuspendingServer(null)} className="px-4 py-2 text-xs font-semibold text-[#94a3b8] hover:text-white">Cancel</button>
+                  <button type="submit" className="px-5 py-2 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl hover:bg-amber-500/30">Apply</button>
                 </div>
               </form>
             </motion.div>
@@ -234,33 +277,36 @@ export default function AdminServers() {
       {/* Delete Modal */}
       <AnimatePresence>
         {deletingServer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#121214] border border-theme-500/30 rounded-2xl p-6 max-w-md w-full"
+              className="bg-[rgba(10,14,36,0.95)] border border-rose-500/30 rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl relative overflow-hidden"
             >
-              <h2 className="text-xl font-bold mb-2 text-theme-400">Delete Server?</h2>
-              <p className="text-muted-foreground mb-6">Are you sure you want to permanently delete <strong>{deletingServer.name}</strong>? This action cannot be undone and will destroy all data.</p>
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-rose-500" />
+              
+              <h2 className="text-lg font-bold text-rose-400 mb-2">Delete Server Instance?</h2>
+              <p className="text-sm text-[#94a3b8] leading-relaxed mb-6">
+                Are you sure you want to permanently delete <strong className="text-white">{deletingServer.name}</strong>? This action cannot be undone and will purge all server files, databases, and containers.
+              </p>
               <div className="flex justify-end gap-3">
-                <button onClick={() => setDeletingServer(null)} className="px-4 py-2 bg-muted hover:bg-muted-hover rounded-lg">Cancel</button>
-                <button onClick={handleDelete} className="px-4 py-2 bg-theme-600 hover:bg-theme-500 rounded-lg font-bold">Yes, Delete</button>
+                <button onClick={() => setDeletingServer(null)} className="px-4 py-2 text-xs font-semibold text-[#94a3b8] hover:text-white">Cancel</button>
+                <button onClick={handleDelete} className="px-5 py-2 text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-xl hover:bg-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.4)]">
+                  Yes, Delete Server
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
 
-
 function ActionMenu({ server, setEditingServer, setRam, setCpu, setDisk, setSuspendingServer, setSuspendDuration, setDeletingServer }: any) {
   const [open, setOpen] = useState(false);
   
-  // Close when clicking outside
   useEffect(() => {
     const handleClick = () => setOpen(false);
     if (open) {
@@ -273,19 +319,19 @@ function ActionMenu({ server, setEditingServer, setRam, setCpu, setDisk, setSusp
     <div className="relative" onClick={e => e.stopPropagation()}>
       <button 
         onClick={() => setOpen(!open)}
-        className="p-2 bg-muted hover:bg-muted-hover text-foreground-muted hover:text-foreground rounded-lg transition-colors border border-border-subtle"
+        className="p-2 bg-[rgba(6,9,26,0.6)] hover:bg-[rgba(124,58,237,0.15)] text-[#94a3b8] hover:text-white rounded-xl transition-all border border-[rgba(139,92,246,0.2)]"
       >
-        <MoreVertical className="w-5 h-5" />
+        <MoreVertical className="w-4 h-4" />
       </button>
       
       <AnimatePresence>
         {open && (
           <motion.div 
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-48 bg-[#1a1a1f] border border-border rounded-xl shadow-xl z-40 overflow-hidden flex flex-col py-1"
+            className="absolute right-0 mt-2 w-48 bg-[rgba(10,14,36,0.95)] border border-[rgba(139,92,246,0.25)] rounded-xl shadow-2xl z-40 overflow-hidden flex flex-col py-1 backdrop-blur-xl"
           >
             <button 
               onClick={() => {
@@ -295,9 +341,9 @@ function ActionMenu({ server, setEditingServer, setRam, setCpu, setDisk, setSusp
                 setDisk(server.disk.toString());
                 setOpen(false);
               }}
-              className="flex items-center px-4 py-2.5 text-sm text-foreground-muted hover:bg-muted hover:text-foreground transition-colors text-left"
+              className="flex items-center px-4 py-2.5 text-xs font-semibold text-[#94a3b8] hover:bg-[rgba(124,58,237,0.15)] hover:text-white transition-colors text-left"
             >
-              <Edit2 className="w-4 h-4 mr-3 text-zinc-400" />
+              <Edit2 className="w-3.5 h-3.5 mr-2.5 text-[#a78bfa]" />
               Edit Resources
             </button>
             <button 
@@ -306,20 +352,20 @@ function ActionMenu({ server, setEditingServer, setRam, setCpu, setDisk, setSusp
                 setSuspendDuration(server.suspendDuration || "null");
                 setOpen(false);
               }}
-              className="flex items-center px-4 py-2.5 text-sm text-foreground-muted hover:bg-muted hover:text-foreground transition-colors text-left"
+              className="flex items-center px-4 py-2.5 text-xs font-semibold text-[#94a3b8] hover:bg-[rgba(124,58,237,0.15)] hover:text-white transition-colors text-left"
             >
-              <PauseCircle className="w-4 h-4 mr-3 text-theme-500" />
+              <PauseCircle className="w-3.5 h-3.5 mr-2.5 text-amber-400" />
               {server.suspended ? "Manage Suspension" : "Suspend Server"}
             </button>
-            <div className="h-px bg-muted-hover my-1 mx-2"></div>
+            <div className="h-px bg-[rgba(139,92,246,0.12)] my-1 mx-2" />
             <button 
               onClick={() => {
                 setDeletingServer(server);
                 setOpen(false);
               }}
-              className="flex items-center px-4 py-2.5 text-sm text-theme-400 hover:bg-theme-500/10 hover:text-theme-300 transition-colors text-left"
+              className="flex items-center px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors text-left"
             >
-              <Trash2 className="w-4 h-4 mr-3" />
+              <Trash2 className="w-3.5 h-3.5 mr-2.5" />
               Delete Server
             </button>
           </motion.div>

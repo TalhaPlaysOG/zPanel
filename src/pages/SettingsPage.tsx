@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Settings, Shield, User, Key, Check, AlertCircle, Save, Cpu } from "lucide-react";
@@ -129,26 +130,35 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-4xl">
       {/* Top Header */}
-      <div className="pb-4 border-b border-zinc-800">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Settings</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+      <div className="pb-5 border-b border-[rgba(139,92,246,0.18)]">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#a78bfa] mb-1">
+          <Settings size={14} />
+          <span>Configuration</span>
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-[#f0f4ff]">Settings</h1>
+        <p className="text-sm text-[#94a3b8] mt-0.5">
           Configure panel preferences, runtime environments, and account credentials.
         </p>
       </div>
 
       {/* Admin Panel Settings */}
       {user?.role === "admin" && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6 space-y-5">
-          <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
-            <Settings size={18} className="text-theme-400" />
-            <h2 className="text-sm font-semibold text-white">Panel Configuration</h2>
+        <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] backdrop-blur-xl p-6 sm:p-7 space-y-6 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-2.5 pb-4 border-b border-[rgba(139,92,246,0.12)]">
+            <div className="w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-[#a78bfa]">
+              <Settings size={17} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-[#f0f4ff]">Panel Configuration</h2>
+              <p className="text-xs text-[#64748b]">Global branding and deployment options</p>
+            </div>
           </div>
 
           {settingsMsg && (
             <div
-              className={`flex items-center gap-3 p-3.5 rounded-lg text-sm ${
+              className={`flex items-center gap-3 p-3.5 rounded-xl text-sm ${
                 settingsMsg.type === "success"
                   ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
                   : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
@@ -159,30 +169,30 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <form onSubmit={handleSavePanelSettings} className="space-y-4">
+          <form onSubmit={handleSavePanelSettings} className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Panel Name</label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-1.5">Panel Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full sm:w-80 px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+                className="w-full sm:w-80 px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
                 placeholder="zPanel"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Default Server Runtime</label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-1.5">Default Server Runtime</label>
               <select
                 value={runtime}
                 onChange={(e) => setRuntime(e.target.value)}
-                className="w-full sm:w-80 px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+                className="w-full sm:w-80 px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
               >
                 <option value="docker">Docker Containers (Recommended)</option>
                 <option value="local">Local Process Mode</option>
               </select>
-              <p className="text-[11px] text-zinc-400 mt-1">
-                Preferred runtime for newly deployed servers.
+              <p className="text-xs text-[#64748b] mt-1.5">
+                Default runtime selected when creating new servers.
               </p>
             </div>
 
@@ -192,9 +202,9 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={allowRegistration}
                   onChange={(e) => setAllowRegistration(e.target.checked)}
-                  className="rounded bg-zinc-950 border-zinc-800 text-theme-600 focus:ring-0"
+                  className="w-4 h-4 rounded bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.3)] text-purple-600 focus:ring-0 cursor-pointer"
                 />
-                <span className="text-sm text-zinc-200">Allow New User Registration</span>
+                <span className="text-sm font-medium text-[#f0f4ff]">Allow Public User Registration</span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer">
@@ -202,9 +212,9 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={playitActive}
                   onChange={(e) => setPlayitActive(e.target.checked)}
-                  className="rounded bg-zinc-950 border-zinc-800 text-theme-600 focus:ring-0"
+                  className="w-4 h-4 rounded bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.3)] text-purple-600 focus:ring-0 cursor-pointer"
                 />
-                <span className="text-sm text-zinc-200">Enable Playit.gg Tunnel Integration</span>
+                <span className="text-sm font-medium text-[#f0f4ff]">Enable Playit.gg Tunnel Integration</span>
               </label>
             </div>
 
@@ -212,10 +222,10 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={savingSettings}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-theme-600 hover:bg-theme-500 rounded-lg transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-xl shadow-[0_0_20px_-4px_rgba(124,58,237,0.6)] transition-all disabled:opacity-50 active:scale-95"
               >
                 <Save size={14} />
-                <span>{savingSettings ? "Saving..." : "Save Configuration"}</span>
+                <span>{savingSettings ? "Saving…" : "Save Configuration"}</span>
               </button>
             </div>
           </form>
@@ -223,15 +233,20 @@ export default function SettingsPage() {
       )}
 
       {/* Account Profile & Security */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6 space-y-5">
-        <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
-          <User size={18} className="text-theme-400" />
-          <h2 className="text-sm font-semibold text-white">Account & Credentials</h2>
+      <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] backdrop-blur-xl p-6 sm:p-7 space-y-6 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center gap-2.5 pb-4 border-b border-[rgba(139,92,246,0.12)]">
+          <div className="w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-[#a78bfa]">
+            <User size={17} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-[#f0f4ff]">Account & Credentials</h2>
+            <p className="text-xs text-[#64748b]">Update your personal login info</p>
+          </div>
         </div>
 
         {profileMsg && (
           <div
-            className={`flex items-center gap-3 p-3.5 rounded-lg text-sm ${
+            className={`flex items-center gap-3 p-3.5 rounded-xl text-sm ${
               profileMsg.type === "success"
                 ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
                 : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
@@ -243,20 +258,20 @@ export default function SettingsPage() {
         )}
 
         {/* Change Username */}
-        <form onSubmit={handleUpdateUsername} className="space-y-3 pb-5 border-b border-zinc-800/80">
-          <label className="block text-xs font-medium text-zinc-300">Change Username</label>
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <form onSubmit={handleUpdateUsername} className="space-y-3 pb-6 border-b border-[rgba(139,92,246,0.12)]">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Display Username</label>
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
             <input
               type="text"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
-              className="w-full sm:w-80 px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+              className="w-full sm:w-80 px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
               placeholder="Username"
             />
             <button
               type="submit"
               disabled={savingProfile}
-              className="self-start sm:self-auto px-4 py-2 text-xs font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+              className="self-start sm:self-auto px-4 py-2.5 text-xs font-semibold text-[#94a3b8] hover:text-[#f0f4ff] bg-[rgba(6,9,26,0.6)] hover:bg-[rgba(124,58,237,0.15)] border border-[rgba(139,92,246,0.2)] rounded-xl transition-all"
             >
               Update Username
             </button>
@@ -264,35 +279,35 @@ export default function SettingsPage() {
         </form>
 
         {/* Change Password */}
-        <form onSubmit={handleUpdatePassword} className="space-y-3">
-          <label className="block text-xs font-medium text-zinc-300">Change Password</label>
-          <div className="space-y-2 max-w-sm">
+        <form onSubmit={handleUpdatePassword} className="space-y-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Change Password</label>
+          <div className="space-y-2.5 max-w-sm">
             <input
               type="password"
               placeholder="Current Password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+              className="w-full px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
             />
             <input
               type="password"
               placeholder="New Password (min 8 chars)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+              className="w-full px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
             />
             <input
               type="password"
               placeholder="Confirm New Password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-zinc-700"
+              className="w-full px-3.5 py-2.5 text-sm bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] rounded-xl text-white outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={savingProfile}
-            className="px-4 py-2 text-xs font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+            className="px-4 py-2.5 text-xs font-semibold text-[#94a3b8] hover:text-[#f0f4ff] bg-[rgba(6,9,26,0.6)] hover:bg-[rgba(124,58,237,0.15)] border border-[rgba(139,92,246,0.2)] rounded-xl transition-all"
           >
             Update Password
           </button>

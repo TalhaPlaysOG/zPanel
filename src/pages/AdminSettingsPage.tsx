@@ -438,7 +438,7 @@ export default function AdminSettingsPage(): React.ReactElement {
           <button 
             type="submit" 
             disabled={isSavingFirebase}
-            className="bg-theme-600 hover:bg-amber-600 text-zinc-950 font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(124,58,237,0.5)] active:scale-[0.98] disabled:opacity-50"
           >
             {isSavingFirebase ? "Saving Config..." : "Save Firebase Credentials"}
           </button>
@@ -497,23 +497,17 @@ export default function AdminSettingsPage(): React.ReactElement {
                    <button
                        key={tab.id}
                        onClick={() => { setActiveTab(tab.id); setMobileOpen(false); }}
-                       className={`relative flex w-full items-center px-3 py-3 rounded transition-colors group overflow-hidden`}
+                       className={`relative flex w-full items-center px-3 py-3 rounded-xl transition-all group overflow-hidden ${
+                           isActive ? "bg-gradient-to-r from-purple-600/25 to-purple-600/05 text-[#f0f4ff] shadow-[inset_0_0_12px_rgba(124,58,237,0.15)]" : "hover:bg-white/[0.04] text-[#94a3b8]"
+                       }`}
                    >
                        {isActive && (
-                           <motion.div 
-                               layoutId="activeAdminTab" 
-                               className="absolute inset-0 bg-white/[0.05]" 
-                               initial={false} 
-                               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                           />
+                           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#8b5cf6] rounded-r shadow-[0_0_10px_#8b5cf6]" />
                        )}
-                       {isActive && (
-                           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-white" />
-                       )}
-                       <div className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-white' : 'text-dim group-hover:text-white'}`}>
+                       <div className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-[#a78bfa]' : 'text-[#64748b] group-hover:text-white'}`}>
                            {tab.icon}
                        </div>
-                       <span className={`ml-3 relative z-10 font-mono text-xs tracking-wider transition-colors duration-200 ${isActive ? 'text-white font-semibold' : 'text-dim group-hover:text-white'}`}>
+                       <span className={`ml-3 relative z-10 font-mono text-xs tracking-wider transition-colors duration-200 ${isActive ? 'text-[#f0f4ff] font-bold' : 'text-[#94a3b8] group-hover:text-white'}`}>
                            {tab.label.toUpperCase()}
                        </span>
                    </button>
@@ -584,7 +578,7 @@ export default function AdminSettingsPage(): React.ReactElement {
                     placeholder="Enter panel name"
                     className="flex-1 bg-muted border border-border focus:border-theme-600 focus:ring-1 focus:ring-theme-600/50 rounded-xl px-4 py-2.5 text-foreground transition-all shadow-inner outline-none"
                   />
-                  <button disabled={isSavingSettings} type="submit" className="bg-theme-700 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-[0.98] whitespace-nowrap disabled:opacity-50">
+                  <button disabled={isSavingSettings} type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(124,58,237,0.5)] active:scale-[0.98] whitespace-nowrap disabled:opacity-50">
                     {isSavingSettings ? "Saving..." : "Save"}
                   </button>
                 </div>

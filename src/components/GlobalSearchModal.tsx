@@ -198,10 +198,10 @@ export default function GlobalSearchModal() {
             onClick={() => setIsOpen(false)} 
           />
 
-          <div className="relative w-full max-w-2xl bg-card/95 border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
+          <div className="relative w-full max-w-2xl bg-[rgba(10,14,36,0.95)] border border-[rgba(139,92,246,0.25)] rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8),0_0_50px_-20px_rgba(124,58,237,0.3)] backdrop-blur-2xl overflow-hidden z-10 flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
             {/* Input Bar */}
-            <div className="relative flex items-center border-b border-border/60 px-4 py-3 bg-card">
-              <Search className="w-5 h-5 text-theme-500 shrink-0 mr-3" />
+            <div className="relative flex items-center border-b border-[rgba(139,92,246,0.18)] px-4 py-3 bg-[rgba(6,9,26,0.5)]">
+              <Search className="w-5 h-5 text-[#a78bfa] shrink-0 mr-3" />
               <input 
                 ref={inputRef}
                 type="text"
@@ -211,35 +211,35 @@ export default function GlobalSearchModal() {
                   setSelectedIndex(0);
                 }}
                 placeholder="Search servers, settings, navigation..."
-                className="w-full bg-transparent text-sm sm:text-base text-foreground outline-none placeholder:text-muted-foreground"
+                className="w-full bg-transparent text-sm sm:text-base text-[#f0f4ff] outline-none placeholder:text-[#64748b]"
               />
               {query && (
                 <button 
                   onClick={() => setQuery("")}
-                  className="p-1 text-muted-foreground hover:text-foreground rounded-md mr-1"
+                  className="p-1 text-[#64748b] hover:text-white rounded-md mr-1.5"
                 >
                   <X size={16} />
                 </button>
               )}
               <button 
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+                className="p-1.5 text-xs font-semibold text-[#94a3b8] hover:text-white bg-[rgba(124,58,237,0.15)] border border-[rgba(139,92,246,0.2)] rounded-lg transition-colors"
               >
                 ESC
               </button>
             </div>
 
             {/* Results List */}
-            <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar max-h-[420px]">
+            <div className="overflow-y-auto p-2.5 space-y-1 custom-scrollbar max-h-[420px]">
               {isLoading ? (
-                <div className="p-8 text-center text-xs text-muted-foreground">
+                <div className="p-8 text-center text-xs text-[#94a3b8]">
                   Searching servers and system...
                 </div>
               ) : allResults.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm font-medium">No matching results found</p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
+                <div className="p-8 text-center text-[#94a3b8]">
+                  <Search className="w-8 h-8 mx-auto mb-2 opacity-30 text-[#a78bfa]" />
+                  <p className="text-sm font-semibold text-[#f0f4ff]">No matching results found</p>
+                  <p className="text-xs text-[#64748b] mt-1">
                     Try searching for server name, "deploy", or "settings"
                   </p>
                 </div>
@@ -253,30 +253,30 @@ export default function GlobalSearchModal() {
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={`flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer ${
                         isSelected 
-                          ? "bg-theme-600/20 text-foreground border border-theme-600/40 shadow-sm" 
-                          : "hover:bg-muted/50 border border-transparent text-muted-foreground"
+                          ? "bg-gradient-to-r from-purple-600/25 to-purple-600/05 text-[#f0f4ff] border border-[rgba(139,92,246,0.4)] shadow-[0_0_15px_rgba(124,58,237,0.2)]" 
+                          : "hover:bg-white/[0.04] border border-transparent text-[#94a3b8]"
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`p-2 rounded-lg bg-card/80 border border-border/50 shrink-0 ${isSelected ? "text-theme-500" : ""}`}>
+                        <div className={`p-2 rounded-xl bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] shrink-0 ${isSelected ? "text-[#a78bfa]" : "text-[#64748b]"}`}>
                           {item.icon}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                            <span className="font-semibold text-xs sm:text-sm text-[#f0f4ff] truncate">
                               {item.title}
                             </span>
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border uppercase tracking-wider ${
                               item.category === "Server" 
-                                ? "bg-theme-600/10 text-theme-500 border-theme-600/20"
+                                ? "bg-purple-500/15 text-[#a78bfa] border-purple-500/30"
                                 : item.category === "Action"
-                                ? "bg-theme-600/10 text-theme-500 border-theme-600/20"
-                                : "bg-muted text-muted-foreground border-border/50"
+                                ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
+                                : "bg-white/5 text-[#94a3b8] border-white/10"
                             }`}>
                               {item.category}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
+                          <p className="text-xs text-[#64748b] truncate mt-0.5">
                             {item.subtitle}
                           </p>
                         </div>
@@ -284,11 +284,11 @@ export default function GlobalSearchModal() {
 
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         {isSelected && (
-                          <span className="hidden sm:flex items-center gap-1 text-[11px] text-theme-300 font-medium bg-theme-600/20 px-2 py-0.5 rounded-md">
+                          <span className="hidden sm:flex items-center gap-1 text-[11px] text-[#a78bfa] font-medium bg-purple-500/15 px-2 py-0.5 rounded-md border border-purple-500/20">
                             Open <CornerDownLeft size={11} />
                           </span>
                         )}
-                        <ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? "text-theme-500 translate-x-0.5" : "text-muted-foreground/40"}`} />
+                        <ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? "text-[#a78bfa] translate-x-0.5" : "text-[#64748b]"}`} />
                       </div>
                     </div>
                   );
@@ -297,20 +297,20 @@ export default function GlobalSearchModal() {
             </div>
 
             {/* Footer with shortcuts */}
-            <div className="px-4 py-2.5 bg-muted/40 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="px-4 py-2.5 bg-[rgba(6,9,26,0.6)] border-t border-[rgba(139,92,246,0.18)] flex items-center justify-between text-[11px] text-[#64748b]">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-card border border-border/60 rounded text-[10px]">↑</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-card border border-border/60 rounded text-[10px]">↓</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-[rgba(10,14,36,0.8)] border border-[rgba(139,92,246,0.2)] rounded text-[10px] text-[#94a3b8]">↑</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-[rgba(10,14,36,0.8)] border border-[rgba(139,92,246,0.2)] rounded text-[10px] text-[#94a3b8]">↓</kbd>
                   to navigate
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-card border border-border/60 rounded text-[10px]">↵</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-[rgba(10,14,36,0.8)] border border-[rgba(139,92,246,0.2)] rounded text-[10px] text-[#94a3b8]">↵</kbd>
                   to select
                 </span>
               </div>
               <div>
-                <kbd className="px-1.5 py-0.5 bg-card border border-border/60 rounded text-[10px]">ESC</kbd>
+                <kbd className="px-1.5 py-0.5 bg-[rgba(10,14,36,0.8)] border border-[rgba(139,92,246,0.2)] rounded text-[10px] text-[#94a3b8]">ESC</kbd>
                 to close
               </div>
             </div>

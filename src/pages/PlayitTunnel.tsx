@@ -85,51 +85,62 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="p-6 h-full overflow-y-auto"
+      className="space-y-6"
     >
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
-            <Globe className="w-6 h-6 text-theme-500" />
-            Playit Tunnel
-          </h1>
-          <p className="text-muted-foreground">
-            Generate and manage your global Playit tunnel to expose services directly from the panel.
+          <h2 className="text-xl font-bold text-[#f0f4ff] mb-1 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-[#a78bfa]" />
+            Playit Global Tunnel
+          </h2>
+          <p className="text-sm text-[#94a3b8]">
+            Forward game traffic through Playit.gg network to bypass CGNAT and port restrictions.
           </p>
         </div>
 
         {serverRuntimeType === 'local' ? (
-          <div className="bg-theme-600/10 border border-theme-600/30 rounded-xl p-6 mb-6">
-            <h3 className="text-theme-600 font-bold mb-2 flex items-center gap-2">
-              <Globe className="w-5 h-5" /> Local Process Playit (Beta / Coming Soon)
+          <div className="bg-purple-600/10 border border-purple-500/30 rounded-2xl p-5 mb-4">
+            <h3 className="text-[#a78bfa] font-bold text-sm mb-1 flex items-center gap-2">
+              <Globe className="w-4 h-4" /> Local Process Playit (Beta)
             </h3>
-            <p className="text-theme-600/80 text-sm">
-              Playit / Play Tunnel integration for Local Process servers is currently in Beta and temporarily disabled. 
-              The host-side execution path is still under development to ensure it safely routes traffic directly to the host process rather than a Docker container.
+            <p className="text-[#94a3b8] text-xs leading-relaxed">
+              Playit tunnel integration for Local Process servers is currently in Beta. Ensure direct host socket routing before public release.
             </p>
           </div>
         ) : null}
-        <div className={`bg-muted-subtle border border-border-subtle rounded-xl p-6 shadow-sm ${serverRuntimeType === 'local' ? 'opacity-50 pointer-events-none' : ''}`}>
+
+        <div className={`bg-[rgba(6,9,26,0.6)] border border-[rgba(139,92,246,0.18)] rounded-2xl p-5 shadow-sm ${serverRuntimeType === 'local' ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground mb-1">Tunnel Status</h2>
+              <span className="text-xs uppercase tracking-wider font-semibold text-[#64748b] block mb-1">Tunnel Status</span>
               <div className="flex items-center gap-2">
                 {status === "checking" ? (
-                  <><Loader2 className="w-4 h-4 text-muted-foreground animate-spin" /><span className="text-muted-foreground">Checking...</span></>
+                  <><Loader2 className="w-4 h-4 text-[#94a3b8] animate-spin" /><span className="text-[#94a3b8] text-sm">Checking…</span></>
                 ) : status === "running" ? (
-                  <><span className="flex h-2.5 w-2.5 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-theme-500 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-theme-600"></span></span><span className="text-theme-500 font-medium">Running</span></>
+                  <>
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                    </span>
+                    <span className="text-emerald-400 font-bold text-sm">Running Online</span>
+                  </>
                 ) : (
-                  <><span className="flex h-2.5 w-2.5 relative"><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-600"></span></span><span className="text-muted-foreground font-medium">Stopped</span></>
+                  <>
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" />
+                    </span>
+                    <span className="text-[#64748b] font-medium text-sm">Stopped</span>
+                  </>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
               {status !== "running" ? (
                 <button 
                   onClick={generateTunnel}
                   disabled={isProcessing || status === "checking"}
-                  className="flex-1 md:flex-none flex items-center justify-center space-x-2 px-4 py-2 bg-theme-600 hover:bg-theme-700 text-foreground font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                  className="flex-1 md:flex-none flex items-center justify-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-[0_0_16px_rgba(124,58,237,0.5)] transition-all disabled:opacity-50 active:scale-95"
                 >
                   {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                   <span>Generate Tunnel</span>
@@ -139,7 +150,7 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
                   <button 
                     onClick={stopTunnel}
                     disabled={isProcessing}
-                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-theme-500/10 hover:bg-theme-500/20 text-theme-500 border border-theme-500/20 font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
                   >
                     {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
                     <span>Stop Tunnel</span>
@@ -147,7 +158,7 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
                   <button 
                     onClick={generateTunnel}
                     disabled={isProcessing}
-                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
                   >
                     {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     <span>Restart</span>
@@ -156,24 +167,24 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
                     <button 
                       onClick={() => setShowResetConfirm(true)}
                       disabled={isProcessing}
-                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-theme-600/10 hover:bg-theme-600/20 text-theme-600 border border-theme-600/20 font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-[#a78bfa] border border-purple-500/20 font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
                     >
                       {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       <span>Reset Agent</span>
                     </button>
                   ) : (
-                    <div className="flex items-center gap-2 bg-theme-600/10 border border-theme-600/30 px-3 py-1.5 rounded-lg text-xs">
-                      <span className="text-theme-400">Reset agent & IP?</span>
+                    <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 rounded-xl text-xs">
+                      <span className="text-[#a78bfa]">Reset agent & IP?</span>
                       <button
                         onClick={resetTunnel}
                         disabled={isProcessing}
-                        className="bg-theme-600 hover:bg-theme-500 text-white font-bold px-2 py-1 rounded text-xs transition-all active:scale-95"
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition-all active:scale-95"
                       >
                         Yes
                       </button>
                       <button
                         onClick={() => setShowResetConfirm(false)}
-                        className="bg-muted hover:bg-muted-hover text-muted-foreground px-2 py-1 rounded text-xs transition-all"
+                        className="bg-white/10 text-[#94a3b8] hover:text-white px-2 py-1 rounded-lg text-xs transition-all"
                       >
                         No
                       </button>
@@ -185,18 +196,18 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
           </div>
           
           {claimLink && (
-            <div className="mt-6 p-4 bg-theme-600/10 border border-theme-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="mt-5 p-4 bg-purple-600/15 border border-purple-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-theme-500 font-semibold mb-1 flex items-center gap-2">
-                  <LinkIcon className="w-4 h-4" /> Claim Link Generated
+                <h3 className="text-white font-bold text-sm mb-1 flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4 text-purple-400" /> Claim Link Generated
                 </h3>
-                <p className="text-sm text-theme-500/80">Click the link to add this agent to your Playit.gg account.</p>
+                <p className="text-xs text-[#94a3b8]">Click the link below to link this daemon agent to your Playit.gg account.</p>
               </div>
               <a 
                 href={claimLink} 
                 target="_blank" 
                 rel="noreferrer"
-                className="px-4 py-2 bg-theme-600 text-foreground font-medium rounded-lg text-sm hover:bg-theme-700 transition-colors shrink-0 text-center shadow-sm"
+                className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl text-xs shadow-[0_0_15px_rgba(124,58,237,0.5)] hover:brightness-110 transition-all shrink-0 text-center"
               >
                 Claim Agent
               </a>
@@ -204,15 +215,15 @@ export default function PlayitTunnel({ serverId }: { serverId: string }) {
           )}
         </div>
 
-        <div className="bg-card border border-border-subtle rounded-xl p-4 shadow-sm flex flex-col h-[400px]">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-            Terminal Output
+        {/* Tunnel Output Box */}
+        <div className="bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.18)] rounded-2xl p-4 shadow-sm flex flex-col h-[380px]">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-3">
+            Tunnel Terminal Output
           </h3>
-          <div className="flex-1 bg-background rounded-lg p-3 font-mono text-[13px] text-foreground-muted overflow-y-auto whitespace-pre-wrap border border-border-subtle">
+          <div className="flex-1 bg-[#06091a] rounded-xl p-3.5 font-mono text-xs text-[#f0f4ff] overflow-y-auto whitespace-pre-wrap border border-[rgba(139,92,246,0.12)] custom-scrollbar">
             {logs || "Waiting for output..."}
           </div>
         </div>
-
       </div>
     </motion.div>
   );

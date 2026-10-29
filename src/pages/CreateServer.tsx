@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -8,111 +9,39 @@ import {
   ChevronDown, Search, Rocket, SlidersHorizontal, FastForward, Network,
   Wrench, Feather, Info, Code2, TerminalSquare
 } from "lucide-react";
-
-const pageStyles = `
-  .deploy-theme {
-    background: #050505; color: #fff; font-family: 'IBM Plex Sans', sans-serif;
-    min-height: 100vh;
-  }
-  .deploy-theme .font-display { font-family: 'Chakra Petch', sans-serif; }
-  .deploy-theme .font-mono { font-family: 'IBM Plex Mono', monospace; }
-  
-  .deploy-theme .bg-grid {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-    background-size: 56px 56px;
-    mask-image: radial-gradient(ellipse 95% 70% at 50% 0%, #000 25%, transparent 78%);
-    -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 0%, #000 25%, transparent 78%);
-  }
-  .deploy-theme .scanline {
-    position: fixed; left: 0; right: 0; height: 140px; top: -140px; z-index: 1; pointer-events: none;
-    background: linear-gradient(to bottom, transparent, rgba(255,255,255,.028), transparent);
-    animation: scan 10s linear infinite;
-  }
-  @keyframes scan { to { top: 100vh; } }
-  .deploy-theme .noise {
-    position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: .035;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-  
-  .deploy-theme .corner { position: absolute; width: 12px; height: 12px; }
-  .deploy-theme .c-tl { top: -1px; left: -1px; border-top: 2px solid #fff; border-left: 2px solid #fff; }
-  .deploy-theme .c-tr { top: -1px; right: -1px; border-top: 2px solid #fff; border-right: 2px solid #fff; }
-  .deploy-theme .c-bl { bottom: -1px; left: -1px; border-bottom: 2px solid #fff; border-left: 2px solid #fff; }
-  .deploy-theme .c-br { bottom: -1px; right: -1px; border-bottom: 2px solid #fff; border-right: 2px solid #fff; }
-
-  .deploy-theme .inp {
-    width: 100%; background: #0e0e0e; border: 1px solid #232323; padding: .85rem 1rem; color: #fff; outline: none; transition: border-color .25s, box-shadow .25s; font-size: .95rem;
-  }
-  .deploy-theme .inp::placeholder { color: #4c4c4c; }
-  .deploy-theme .inp:focus { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
-  
-  .deploy-theme .sel-card {
-    position: relative; background: #0e0e0e; border: 1px solid #232323; cursor: pointer; transition: all .28s cubic-bezier(.16,1,.3,1); overflow: hidden;
-  }
-  .deploy-theme .sel-card:hover { transform: translateY(-3px); border-color: #5a5a5a; }
-  .deploy-theme .sel-card.selected { border-color: #fff; background: #131313; box-shadow: 0 0 0 1px #fff, 0 14px 40px -14px rgba(255,255,255,.25); }
-  .deploy-theme .sel-card .tick {
-    position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; background: #fff; color: #000; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(.3); transition: all .3s cubic-bezier(.34,1.56,.64,1);
-  }
-  .deploy-theme .sel-card.selected .tick { opacity: 1; transform: scale(1); }
-  .deploy-theme .soft-card .ic { color: #4c4c4c; transition: all .3s; }
-  .deploy-theme .soft-card:hover .ic { color: #cfcfcf; }
-  .deploy-theme .soft-card.selected .ic { color: #fff; filter: drop-shadow(0 0 8px rgba(255,255,255,.5)); }
-
-  .deploy-theme .btn-white { position: relative; overflow: hidden; background: #fff; color: #000; }
-  .deploy-theme .btn-white::before { content: ''; position: absolute; inset: 0; background: #000; transform: translateY(101%); transition: transform .35s cubic-bezier(.16,1,.3,1); }
-  .deploy-theme .btn-white:hover:not(:disabled)::before { transform: translateY(0); }
-  .deploy-theme .btn-white > * { position: relative; z-index: 1; transition: color .35s; }
-  .deploy-theme .btn-white:hover:not(:disabled) > * { color: #fff; }
-  .deploy-theme .btn-white:disabled { opacity: .35; cursor: not-allowed; }
-  
-  .deploy-theme .btn-ghost { background: transparent; border: 1px solid #232323; color: #8f8f8f; transition: all .25s; }
-  .deploy-theme .btn-ghost:hover:not(:disabled) { border-color: #fff; color: #fff; }
-  .deploy-theme .btn-ghost:disabled { opacity: .3; cursor: not-allowed; }
-
-  .deploy-theme .dot { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border: 1px solid #232323; background: #0b0b0b; font-size: 12px; color: #4c4c4c; transition: all .35s cubic-bezier(.16,1,.3,1); }
-  .deploy-theme .dot.active { border-color: #fff; color: #fff; box-shadow: 0 0 0 1px #fff, 0 0 22px -4px rgba(255,255,255,.5); }
-  .deploy-theme .dot.done { background: #fff; color: #000; border-color: #fff; }
-  .deploy-theme .conn-fill { height: 100%; background: #fff; width: 0; transition: width .5s cubic-bezier(.16,1,.3,1); }
-  
-  .deploy-theme .anim-forward { animation: sR .5s cubic-bezier(.16,1,.3,1); }
-  .deploy-theme .anim-back { animation: sL .5s cubic-bezier(.16,1,.3,1); }
-  @keyframes sR { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: translateX(0); } }
-  @keyframes sL { from { opacity: 0; transform: translateX(-46px); } to { opacity: 1; transform: translateX(0); } }
-  
-  .deploy-theme .pulse-dot { animation: pd 2.4s infinite; }
-  @keyframes pd { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); } 50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); } }
-`;
+import { useSettings } from '../context/SettingsContext';
 
 const RAM = [
-  {v:1,label:'Small Testing Server'},{v:2,label:'Small Testing Server'},{v:4,label:'Starter Survival'},
-  {v:8,label:'Medium Survival Server'},{v:16,label:'Large Community Server'},
-  {v:24,label:'Heavy Modpack Server'},{v:32,label:'High-Traffic Network'},
-  {v:48,label:'Enterprise Workload'},{v:64,label:'Extreme Performance'},
+  { v: 1, label: 'Small Testing Server' },
+  { v: 2, label: 'Small Testing Server' },
+  { v: 4, label: 'Starter Survival' },
+  { v: 8, label: 'Medium Survival Server' },
+  { v: 16, label: 'Large Community Server' },
+  { v: 24, label: 'Heavy Modpack Server' },
+  { v: 32, label: 'High-Traffic Network' },
+  { v: 48, label: 'Enterprise Workload' },
+  { v: 64, label: 'Extreme Performance' },
 ];
-const CPU_MAP: Record<number, number> = {1:100,2:100,4:150,8:200,16:300,24:400,32:500,48:700,64:800};
+
+const CPU_MAP: Record<number, number> = { 1: 100, 2: 100, 4: 150, 8: 200, 16: 300, 24: 400, 32: 500, 48: 700, 64: 800 };
 
 const MINECRAFT_SOFTWARE = [
-  {id:'paper',name:'Paper',desc:'High Performance',icon: Zap},
-  {id:'spigot',name:'Spigot',desc:'Classic Plugins',icon: Wrench},
-  {id:'fabric',name:'Fabric',desc:'Lightweight Mods',icon: Feather},
-  {id:'forge',name:'Forge',desc:'Classic Modpack',icon: Wrench},
-  {id:'bungeecord',name:'BungeeCord',desc:'Classic Proxy',icon: Network},
-  {id:'velocity',name:'Velocity',desc:'Next-gen Proxy',icon: FastForward}
+  { id: 'paper', name: 'Paper', desc: 'High Performance', icon: Zap },
+  { id: 'spigot', name: 'Spigot', desc: 'Classic Plugins', icon: Wrench },
+  { id: 'fabric', name: 'Fabric', desc: 'Lightweight Mods', icon: Feather },
+  { id: 'forge', name: 'Forge', desc: 'Classic Modpack', icon: Wrench },
+  { id: 'bungeecord', name: 'BungeeCord', desc: 'Classic Proxy', icon: Network },
+  { id: 'velocity', name: 'Velocity', desc: 'Next-gen Proxy', icon: FastForward }
 ];
 
 const APPLICATION_SOFTWARE = [
-  {id:'nodejs',name:'Node.js',desc:'JS / TS Runtime & Discord Bots',icon: Code2},
-  {id:'python',name:'Python',desc:'Python 3.x Runtime & Scripts',icon: TerminalSquare}
+  { id: 'nodejs', name: 'Node.js', desc: 'JS / TS Runtime & Discord Bots', icon: Code2 },
+  { id: 'python', name: 'Python', desc: 'Python 3.x Runtime & Scripts', icon: TerminalSquare }
 ];
 
 const SOFTWARE = [...MINECRAFT_SOFTWARE, ...APPLICATION_SOFTWARE];
+const STEPS = ['IDENTITY', 'RESOURCES', 'ACCESS', 'SOFTWARE', 'REVIEW'];
 
-const STEPS = ['IDENTITY','RESOURCES','ACCESS','SOFTWARE','REVIEW'];
-
-// Custom Dropdown Component
 function CustomDropdown({ value, options, onChange, renderValue, renderOption, placeholder }: any) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -128,49 +57,49 @@ function CustomDropdown({ value, options, onChange, renderValue, renderOption, p
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [wrapperRef]);
 
-  const filtered = options.filter((o: any) => 
+  const filtered = options.filter((o: any) =>
     (o.label || o.name || o.value || o.v || '').toString().toLowerCase().includes(search.toLowerCase())
   );
-  
+
   const selected = options.find((o: any) => (o.value || o.v) === value);
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <button 
-        type="button" 
+      <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-3 inp text-left !py-3 bg-[#0e0e0e]"
+        className="w-full flex items-center justify-between gap-3 text-left py-3 px-4 rounded-xl border border-[rgba(139,92,246,0.2)] bg-[rgba(6,9,26,0.7)] text-[#f0f4ff] hover:border-[rgba(139,92,246,0.4)] transition-all outline-none"
       >
         <span className="flex items-center gap-3 min-w-0">
-          {selected ? renderValue(selected) : <span className="text-[#4c4c4c]">{placeholder}</span>}
+          {selected ? renderValue(selected) : <span className="text-[#64748b]">{placeholder}</span>}
         </span>
-        <ChevronDown className={`w-4 h-4 text-[#4c4c4c] transition-transform duration-300 shrink-0 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-[#64748b] transition-transform duration-300 shrink-0 ${open ? 'rotate-180' : ''}`} />
       </button>
-      
+
       {open && (
-        <div className="absolute z-50 mt-2 w-full bg-[#0b0b0b] border border-[#232323] shadow-2xl shadow-black/70">
-          <div className="p-2 border-b border-[#232323]">
+        <div className="absolute z-50 mt-2 w-full rounded-xl bg-[rgba(10,14,36,0.95)] border border-[rgba(139,92,246,0.25)] shadow-2xl backdrop-blur-xl overflow-hidden">
+          <div className="p-2 border-b border-[rgba(139,92,246,0.15)]">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4c4c4c]" />
-              <input 
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748b]" />
+              <input
                 autoFocus
-                className="w-full bg-[#050505] border border-[#232323] pl-8 pr-2 py-2 text-sm outline-none focus:border-white transition-colors text-white" 
+                className="w-full bg-[rgba(6,9,26,0.8)] border border-[rgba(139,92,246,0.2)] rounded-lg pl-9 pr-3 py-2 text-sm text-[#f0f4ff] outline-none focus:border-[#8b5cf6] transition-colors"
                 placeholder="Search..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="max-h-52 overflow-y-auto p-1">
+          <div className="max-h-56 overflow-y-auto p-1.5 custom-scrollbar">
             {filtered.length > 0 ? filtered.map((o: any, i: number) => {
-               const val = o.value || o.v;
-               const isSel = val === value;
-               return (
-                 <div key={i} onClick={() => { onChange(val); setOpen(false); setSearch(''); }}>
-                   {renderOption(o, isSel)}
-                 </div>
-               );
-            }) : <p className="px-3 py-3 text-[11px] text-[#4c4c4c] font-mono">NO RESULTS</p>}
+              const val = o.value || o.v;
+              const isSel = val === value;
+              return (
+                <div key={i} onClick={() => { onChange(val); setOpen(false); setSearch(''); }}>
+                  {renderOption(o, isSel)}
+                </div>
+              );
+            }) : <p className="px-4 py-3 text-xs text-[#64748b] font-mono">No results found</p>}
           </div>
         </div>
       )}
@@ -180,18 +109,16 @@ function CustomDropdown({ value, options, onChange, renderValue, renderOption, p
 
 const getInitials = (name: string) => name ? name.slice(0, 2).toUpperCase() : '??';
 
-import { useSettings } from '../context/SettingsContext';
-
 export default function CreateServer() {
   const { defaultRuntime } = useSettings();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   // Data
   const [nodes, setNodes] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [versions, setVersions] = useState<string[]>([]);
-  
+
   // Form State
   const [currentStep, setCurrentStep] = useState(0);
   const [maxVisited, setMaxVisited] = useState(0);
@@ -199,12 +126,12 @@ export default function CreateServer() {
   const [deployProgress, setDeployProgress] = useState(0);
   const [nameError, setNameError] = useState(false);
   const [dir, setDir] = useState('forward');
-  
-  const [portStatus, setPortStatus] = useState('idle'); // 'idle', 'checking', 'used', 'available', 'invalid', 'error'
+
+  const [portStatus, setPortStatus] = useState('idle');
   const portCheckIdRef = useRef(0);
-  
+
   const [state, setState] = useState({
-    name: '', desc: '', ram: 4, cpu: 150, disk: 10, ip: '', port: 25565, runtimeType: 'docker', 
+    name: '', desc: '', ram: 4, cpu: 150, disk: 10, ip: '', port: 25565, runtimeType: 'docker',
     owner: user?.id || '', node: '', software: 'paper', version: 'latest', auto: true
   });
 
@@ -216,15 +143,15 @@ export default function CreateServer() {
 
   useEffect(() => {
     if (currentStep < 2) return;
-    
+
     if (!state.port || state.port <= 0 || state.port > 65535) {
       setPortStatus('invalid');
       return;
     }
-    
+
     const checkId = ++portCheckIdRef.current;
     setPortStatus('checking');
-    
+
     const timer = setTimeout(() => {
       axios.get(`/api/servers/check-port?port=${state.port}`)
         .then(res => {
@@ -238,31 +165,21 @@ export default function CreateServer() {
           }
         });
     }, 400);
-    
+
     return () => clearTimeout(timer);
   }, [state.port, currentStep]);
 
   useEffect(() => {
-    // Add custom font link
-    const link1 = document.createElement("link");
-    link1.href = "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap";
-    link1.rel = "stylesheet";
-    document.head.appendChild(link1);
-    
     axios.get("/api/nodes").then((res) => {
       setNodes(res.data);
       if (res.data.length > 0 && !state.node) {
         setState(s => ({ ...s, node: res.data[0].id }));
       }
     }).catch(() => {});
-    
+
     if (user?.role === "admin" || user?.role === "owner") {
       axios.get("/api/auth/users").then((res) => setUsers(res.data)).catch(() => {});
     }
-    
-    return () => {
-      document.head.removeChild(link1);
-    };
   }, []);
 
   useEffect(() => {
@@ -293,20 +210,19 @@ export default function CreateServer() {
 
   const handleAutoToggle = () => {
     const nextAuto = !state.auto;
-    setState(prev => ({ 
-      ...prev, 
-      auto: nextAuto, 
-      cpu: nextAuto ? (CPU_MAP[prev.ram] || 100) : prev.cpu 
+    setState(prev => ({
+      ...prev,
+      auto: nextAuto,
+      cpu: nextAuto ? (CPU_MAP[prev.ram] || 100) : prev.cpu
     }));
   };
 
-  const [isCheckingPort, setIsCheckingPort] = useState(false); // Kept for type compatibility if used elsewhere
   const validateStep = async () => {
     if (currentStep === 0 && !state.name.trim()) {
       setNameError(true);
       return false;
     }
-    
+
     if (currentStep === 2) {
       if (!state.port || state.port <= 0 || state.port > 65535) {
         alert("Please enter a valid Server Port (1-65535).");
@@ -317,7 +233,6 @@ export default function CreateServer() {
         return false;
       }
       if (portStatus === 'checking') {
-        // Wait for check to finish? The button should be disabled, but just in case
         return false;
       }
       if (portStatus === 'error') {
@@ -344,16 +259,15 @@ export default function CreateServer() {
       launch();
     }
   };
-  
+
   const launch = async () => {
     if (deployed) return;
-    setDeployProgress(1); // shows the progress block
-    
-    // Fake progress interval
+    setDeployProgress(1);
+
     const iv = setInterval(() => {
       setDeployProgress(p => Math.min(90, p + Math.random() * 8 + 2));
     }, 280);
-    
+
     try {
       const payload = {
         name: state.name,
@@ -365,22 +279,23 @@ export default function CreateServer() {
         ipAlias: state.ip,
         type: state.software,
         version: state.version,
-        ownerId: state.owner || user?.id, runtimeType: state.runtimeType,
+        ownerId: state.owner || user?.id,
+        runtimeType: state.runtimeType,
         nodeId: state.node
       };
       await axios.post("/api/servers", payload);
-      
+
       clearInterval(iv);
       setDeployProgress(100);
-      
+
       setTimeout(() => {
         setDeployed(true);
       }, 500);
-      
+
       setTimeout(() => {
         navigate("/servers");
       }, 2500);
-      
+
     } catch (e: any) {
       clearInterval(iv);
       setDeployProgress(0);
@@ -389,285 +304,337 @@ export default function CreateServer() {
   };
 
   const renderReviewRow = (k: string, v: string) => (
-    <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <span className="text-[#4c4c4c] tracking-widest text-[11px] font-mono">{k}</span>
-      <span className="text-white text-right truncate font-mono">{v}</span>
+    <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-[rgba(139,92,246,0.1)] last:border-b-0">
+      <span className="text-[#64748b] tracking-wider text-xs uppercase font-medium">{k}</span>
+      <span className="text-[#f0f4ff] text-right font-mono text-sm font-semibold truncate">{v}</span>
     </div>
   );
 
   return (
-    <div className="deploy-theme">
-      <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
-      <div className="noise"></div>
-      <div className="bg-grid"></div>
-      <div className="scanline"></div>
-      
-      {/* Progress Line */}
-      <div 
-        style={{ 
-          position: 'fixed', top: 0, left: 0, height: '2px', width: '100%', zIndex: 100, 
-          background: '#fff', transformOrigin: 'left', 
-          transform: `scaleX(${(currentStep + 1) / STEPS.length})`, 
-          boxShadow: '0 0 12px rgba(255,255,255,.7)', transition: 'transform .5s cubic-bezier(.16,1,.3,1)' 
-        }} 
+    <div className="min-h-screen bg-[#06091a] text-[#f0f4ff] font-sans relative selection:bg-purple-600/30">
+      {/* Background ambient glows */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-purple-600/10 blur-[140px] rounded-full" />
+        <div className="absolute bottom-0 right-0 w-[500px] h-[350px] bg-cyan-500/05 blur-[120px] rounded-full" />
+      </div>
+
+      {/* Progress Top Bar */}
+      <div
+        className="fixed top-0 left-0 h-[3px] bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400 z-50 transition-all duration-500 shadow-[0_0_12px_rgba(139,92,246,0.7)]"
+        style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
       />
 
       <div className="relative z-10">
-        <nav className="sticky top-0 z-50 border-b border-[#232323] bg-[#050505]/90 backdrop-blur-md">
-          <div className="max-w-3xl mx-auto px-5 h-16 flex items-center justify-between">
-            <button onClick={() => navigate('/servers')} className="flex items-center gap-2 font-mono text-[11px] tracking-widest text-[#8f8f8f] hover:text-white transition-colors border border-[#232323] px-3 py-1.5">
+        {/* Sticky Header */}
+        <header className="sticky top-0 z-40 bg-[rgba(8,12,31,0.85)] border-b border-[rgba(139,92,246,0.18)] backdrop-blur-xl">
+          <div className="max-w-4xl mx-auto px-5 h-16 flex items-center justify-between">
+            <button
+              onClick={() => navigate('/servers')}
+              className="flex items-center gap-2 text-xs font-semibold tracking-wider text-[#94a3b8] hover:text-[#f0f4ff] transition-colors px-3 py-1.5 rounded-lg border border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.5)] hover:border-[rgba(139,92,246,0.35)]"
+            >
               <ArrowLeft className="w-3.5 h-3.5" /> INSTANCES
             </button>
-            <a href="#" onClick={(e) => { e.preventDefault(); navigate('/servers'); }} className="flex items-center gap-3 group">
-              <span className="font-display font-bold text-lg tracking-wide">z<span className="text-[#8f8f8f] font-medium">Panel</span></span>
-              <div className="w-7 h-7 bg-white flex items-center justify-center group-hover:rotate-45 transition-transform duration-500">
-                <div className="w-3.5 h-3.5 bg-black"></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-[0_0_15px_rgba(124,58,237,0.4)]">
+                <Server className="w-4 h-4 text-white" />
               </div>
-            </a>
-          </div>
-        </nav>
-
-        <main className="max-w-3xl mx-auto px-5 pt-12 pb-16">
-          <header className="mb-10">
-            <p className="font-mono text-[11px] tracking-[0.3em] text-[#4c4c4c] mb-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-white rounded-full pulse-dot"></span> NEW CONTAINER
-            </p>
-            <h1 className="font-display font-bold tracking-tight text-4xl md:text-5xl">DEPLOY INSTANCE</h1>
-          </header>
-
-          {/* Stepper */}
-          <div className="mb-4">
-            <div className="flex items-start">
-              {STEPS.map((s, i) => (
-                <React.Fragment key={i}>
-                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: '56px' }}>
-                    <button 
-                      type="button" 
-                      onClick={() => { if (i <= maxVisited && i !== currentStep && !deployed) showStep(i); }}
-                      className={`dot font-mono ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}`}
-                    >
-                      {i < currentStep ? <Check className="w-4 h-4 stroke-[3]" /> : String(i + 1).padStart(2, '0')}
-                    </button>
-                    <span className="hidden sm:block mt-2 font-mono text-[9px] tracking-widest text-[#4c4c4c] text-center">
-                      {s}
-                    </span>
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div className="flex-1 h-px bg-[#232323] mt-[19px] mx-1">
-                      <div className="conn-fill" style={{ width: i < currentStep ? '100%' : '0%' }}></div>
-                    </div>
-                  )}
-                </React.Fragment>
-              ))}
+              <span className="font-bold text-base tracking-tight text-white">zPanel</span>
             </div>
-            <p className="sm:hidden mt-4 font-mono text-[11px] tracking-widest text-[#8f8f8f] text-center">
-              STEP {currentStep + 1} OF {STEPS.length} — {STEPS[currentStep]}
-            </p>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="max-w-4xl mx-auto px-5 pt-10 pb-20">
+          {/* Header Title */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[#a78bfa] uppercase mb-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+              NEW SERVER WIZARD
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#f0f4ff]">
+              Deploy Server Instance
+            </h1>
+            <p className="text-sm text-[#94a3b8] mt-1">Configure specs, resources, network and software engine</p>
           </div>
 
-          <div className="relative border border-[#232323] bg-[#0b0b0b] p-6 md:p-9 mt-6">
-            <span className="corner c-tl"></span><span className="corner c-tr"></span>
-            <span className="corner c-bl"></span><span className="corner c-br"></span>
+          {/* Stepper Navigation */}
+          <div className="mb-8 p-4 rounded-2xl bg-[rgba(10,14,36,0.7)] border border-[rgba(139,92,246,0.18)] backdrop-blur-md">
+            <div className="flex items-center justify-between">
+              {STEPS.map((stepName, i) => {
+                const isPassed = i < currentStep;
+                const isCurrent = i === currentStep;
+                return (
+                  <React.Fragment key={i}>
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => { if (i <= maxVisited && i !== currentStep && !deployed) showStep(i); }}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                          isPassed
+                            ? 'bg-[#7c3aed] text-white shadow-[0_0_16px_rgba(124,58,237,0.4)]'
+                            : isCurrent
+                            ? 'bg-[rgba(124,58,237,0.2)] text-[#a78bfa] border-2 border-[#8b5cf6] shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+                            : 'bg-[rgba(6,9,26,0.6)] text-[#64748b] border border-[rgba(139,92,246,0.15)]'
+                        }`}
+                      >
+                        {isPassed ? <Check className="w-4 h-4 stroke-[3]" /> : String(i + 1).padStart(2, '0')}
+                      </button>
+                      <span className="hidden sm:block mt-2 text-[10px] font-semibold tracking-wider text-[#64748b] uppercase">
+                        {stepName}
+                      </span>
+                    </div>
+                    {i < STEPS.length - 1 && (
+                      <div className="flex-1 h-[2px] mx-2 bg-[rgba(139,92,246,0.15)] relative overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500"
+                          style={{ width: i < currentStep ? '100%' : '0%' }}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
 
-            <div className={`${dir === 'forward' ? 'anim-forward' : 'anim-back'}`}>
-              
-              {/* STEP 1: IDENTITY */}
-              {currentStep === 0 && (
-                <div className="step-content">
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className="font-mono text-xs text-[#4c4c4c]">01</span>
-                    <h2 className="font-display font-bold tracking-wide text-sm">IDENTITY</h2>
-                    <span className="flex-1 h-px bg-[#232323]"></span>
-                  </div>
-                  
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                    <Server className="w-4 h-4" /> Instance Name <span className="text-white">*</span>
+          {/* Wizard Card Body */}
+          <div className="rounded-2xl border border-[rgba(139,92,246,0.22)] bg-[rgba(10,14,36,0.85)] backdrop-blur-2xl p-6 sm:p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8),0_0_50px_-20px_rgba(124,58,237,0.2)]">
+
+            {/* STEP 1: IDENTITY */}
+            {currentStep === 0 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-[rgba(139,92,246,0.15)]">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-xs font-mono font-bold text-purple-400">01</span>
+                  <h2 className="text-base font-bold text-white tracking-wide">IDENTITY & RUNTIME</h2>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    <Server className="w-4 h-4 text-purple-400" /> Instance Name <span className="text-rose-400">*</span>
                   </label>
-                  <input 
-                    type="text" 
-                    className={`inp ${nameError ? 'border-theme-500' : ''}`} 
-                    placeholder="e.g. Production Survival" 
+                  <input
+                    type="text"
+                    className={`w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border ${nameError ? 'border-rose-500 focus:ring-rose-500/20' : 'border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] focus:ring-purple-500/20'} text-[#f0f4ff] placeholder-[#475569] outline-none transition-all focus:ring-2`}
+                    placeholder="e.g. Survival SMP, Bedwars Proxy"
                     value={state.name}
                     onChange={(e) => { updateState('name', e.target.value); setNameError(false); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNext(); } }}
                   />
                   {nameError && (
-                    <p className="mt-2 text-xs text-theme-400 font-mono flex items-center gap-1.5">
+                    <p className="mt-2 text-xs text-rose-400 flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5" /> Instance name is required.
                     </p>
                   )}
+                </div>
 
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5 mt-7">
-                    <AlignLeft className="w-4 h-4" /> Description
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    <AlignLeft className="w-4 h-4 text-purple-400" /> Description
                   </label>
-                  <textarea 
-                    className="inp" 
-                    style={{ resize: 'vertical', minHeight: '96px', fontFamily: '"IBM Plex Sans", sans-serif' }}
+                  <textarea
+                    className="w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] focus:ring-2 focus:ring-purple-500/20 text-[#f0f4ff] placeholder-[#475569] outline-none transition-all min-h-[90px] resize-y"
                     placeholder="Short description of this server (optional)"
                     value={state.desc}
                     onChange={(e) => updateState('desc', e.target.value)}
                   />
-                  <p className="text-[11px] text-[#4c4c4c] mt-2 mb-7 font-mono">Helps your team identify this instance later.</p>
+                </div>
 
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                    <Cpu className="w-4 h-4" /> Execution Runtime
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">
+                    <Cpu className="w-4 h-4 text-purple-400" /> Execution Runtime
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => updateState('runtimeType', 'docker')}
-                      className={`sel-card p-4 text-left flex flex-col justify-between ${state.runtimeType === 'docker' ? 'selected' : ''}`}
+                      className={`relative p-5 rounded-xl border text-left transition-all ${
+                        state.runtimeType === 'docker'
+                          ? 'border-[#8b5cf6] bg-[rgba(124,58,237,0.15)] shadow-[0_0_24px_-6px_rgba(124,58,237,0.4)]'
+                          : 'border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] hover:border-[rgba(139,92,246,0.35)]'
+                      }`}
                     >
-                      <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
-                      <div>
-                        <div className="font-display font-bold text-sm text-white flex items-center gap-2">
-                          Docker Container
-                          {state.runtimeType === 'docker' && <span className="text-[9px] bg-theme-500 text-white px-1.5 py-0.2 rounded font-mono uppercase">Active</span>}
-                        </div>
-                        <div className="text-[11px] text-[#8f8f8f] mt-1">Isolated sandbox environment with full resource limits and terminal support.</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm text-[#f0f4ff]">Docker Container</span>
+                        {state.runtimeType === 'docker' && (
+                          <span className="w-5 h-5 rounded-full bg-[#7c3aed] text-white flex items-center justify-center">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </span>
+                        )}
                       </div>
+                      <p className="text-xs text-[#94a3b8] leading-relaxed">
+                        Isolated sandbox environment with strict resource limits and full container socket support.
+                      </p>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => updateState('runtimeType', 'local')}
-                      className={`sel-card p-4 text-left flex flex-col justify-between ${state.runtimeType === 'local' ? 'selected' : ''}`}
+                      className={`relative p-5 rounded-xl border text-left transition-all ${
+                        state.runtimeType === 'local'
+                          ? 'border-[#8b5cf6] bg-[rgba(124,58,237,0.15)] shadow-[0_0_24px_-6px_rgba(124,58,237,0.4)]'
+                          : 'border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] hover:border-[rgba(139,92,246,0.35)]'
+                      }`}
                     >
-                      <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
-                      <div>
-                        <div className="font-display font-bold text-sm text-white flex items-center gap-2">
-                          Local Process (Node.js)
-                          {state.runtimeType === 'local' && <span className="text-[9px] bg-amber-500 text-black px-1.5 py-0.2 rounded font-mono uppercase">Active</span>}
-                        </div>
-                        <div className="text-[11px] text-[#8f8f8f] mt-1">Direct system process execution. Ideal for environments without Docker daemon.</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm text-[#f0f4ff]">Local Process</span>
+                        {state.runtimeType === 'local' && (
+                          <span className="w-5 h-5 rounded-full bg-[#7c3aed] text-white flex items-center justify-center">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </span>
+                        )}
                       </div>
+                      <p className="text-xs text-[#94a3b8] leading-relaxed">
+                        Direct system process execution. Ideal for bare-metal VPS without Docker installed.
+                      </p>
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#4c4c4c] mt-2 font-mono">Select how this unit will be executed on the host.</p>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* STEP 2: RESOURCES */}
-              {currentStep === 1 && (
-                <div className="step-content">
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className="font-mono text-xs text-[#4c4c4c]">02</span>
-                    <h2 className="font-display font-bold tracking-wide text-sm">RESOURCES</h2>
-                    <span className="flex-1 h-px bg-[#232323]"></span>
-                  </div>
+            {/* STEP 2: RESOURCES */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-[rgba(139,92,246,0.15)]">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-xs font-mono font-bold text-purple-400">02</span>
+                  <h2 className="text-base font-bold text-white tracking-wide">RESOURCE ALLOCATION</h2>
+                </div>
 
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-4">
-                    <MemoryStickIcon className="w-4 h-4" /> RAM Allocation (GB)
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">
+                    <MemoryStickIcon className="w-4 h-4 text-purple-400" /> RAM Allocation (GB)
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {RAM.map(r => (
-                      <button 
-                        key={r.v} 
-                        type="button" 
+                      <button
+                        key={r.v}
+                        type="button"
                         onClick={() => handleRamClick(r.v)}
-                        className={`sel-card p-4 text-left ${r.v === state.ram ? 'selected' : ''}`}
+                        className={`p-4 rounded-xl border text-left transition-all ${
+                          r.v === state.ram
+                            ? 'border-[#8b5cf6] bg-[rgba(124,58,237,0.18)] shadow-[0_0_20px_-4px_rgba(124,58,237,0.5)]'
+                            : 'border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] hover:border-[rgba(139,92,246,0.35)]'
+                        }`}
                       >
-                        <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
-                        <div className="font-display font-bold text-2xl text-white">
-                          {r.v}<span className="text-sm text-[#8f8f8f] ml-1">GB</span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-2xl font-extrabold text-[#f0f4ff]">
+                            {r.v} <span className="text-xs font-normal text-[#94a3b8]">GB</span>
+                          </span>
+                          {r.v === state.ram && (
+                            <span className="w-4 h-4 rounded-full bg-[#7c3aed] text-white flex items-center justify-center">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] text-[#8f8f8f] mt-1.5 leading-snug">{r.label}</div>
+                        <p className="text-[11px] text-[#94a3b8] mt-1.5 truncate">{r.label}</p>
                       </button>
                     ))}
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-8">
-                    <div>
-                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                        <Cpu className="w-4 h-4" /> CPU Limit (%)
-                      </label>
-                      <div className="flex gap-2.5">
-                        <div className="relative flex-1">
-                          <input 
-                            type="number" min="10" 
-                            className="inp font-mono pr-10" 
-                            value={state.cpu}
-                            onChange={(e) => { updateState('cpu', Number(e.target.value)); updateState('auto', false); }}
-                          />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4c4c4c] font-mono text-sm">%</span>
-                        </div>
-                        <button 
-                          type="button" 
-                          onClick={handleAutoToggle}
-                          className={`px-4 py-3 font-display font-bold text-sm tracking-widest transition-all flex items-center gap-2 whitespace-nowrap border ${state.auto ? 'bg-white text-black border-white' : 'bg-transparent text-[#8f8f8f] border-[#232323]'}`}
-                        >
-                          {state.auto ? <><Zap className="w-4 h-4" /> AUTO</> : <><SlidersHorizontal className="w-4 h-4" /> MANUAL</>}
-                        </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                      <Cpu className="w-4 h-4 text-purple-400" /> CPU Limit (%)
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="number" min="10"
+                          className="w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] text-[#f0f4ff] font-mono outline-none"
+                          value={state.cpu}
+                          onChange={(e) => { updateState('cpu', Number(e.target.value)); updateState('auto', false); }}
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#64748b] font-mono">%</span>
                       </div>
-                      <p className={`text-[11px] mt-2.5 font-mono flex items-center gap-1.5 ${state.auto ? 'text-[#8f8f8f]' : 'text-[#4c4c4c]'}`}>
-                        {state.auto 
-                          ? <><Sparkles className="w-3.5 h-3.5" /> Auto-optimized for {state.ram}GB</> 
-                          : <><SlidersHorizontal className="w-3.5 h-3.5" /> Manual override active</>
-                        }
-                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAutoToggle}
+                        className={`px-4 py-3 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center gap-1.5 border ${
+                          state.auto
+                            ? 'bg-[#7c3aed] text-white border-[#7c3aed] shadow-[0_0_15px_rgba(124,58,237,0.4)]'
+                            : 'bg-transparent text-[#94a3b8] border-[rgba(139,92,246,0.2)] hover:border-[rgba(139,92,246,0.4)]'
+                        }`}
+                      >
+                        {state.auto ? <><Zap className="w-3.5 h-3.5" /> AUTO</> : <><SlidersHorizontal className="w-3.5 h-3.5" /> MANUAL</>}
+                      </button>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                        <HardDrive className="w-4 h-4" /> Disk Limit (GB)
-                      </label>
-                      <input 
-                        type="number" min="1" 
-                        className="inp font-mono" 
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                      <HardDrive className="w-4 h-4 text-purple-400" /> Disk Limit (GB)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number" min="1"
+                        className="w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] text-[#f0f4ff] font-mono outline-none"
                         value={state.disk}
                         onChange={(e) => updateState('disk', Number(e.target.value))}
                       />
-                      <p className="text-[11px] text-[#4c4c4c] mt-2.5 font-mono flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5" /> Storage space allocated to this server.
-                      </p>
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#64748b] font-mono">GB</span>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* STEP 3: NETWORK & ACCESS */}
-              {currentStep === 2 && (
-                <div className="step-content">
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className="font-mono text-xs text-[#4c4c4c]">03</span>
-                    <h2 className="font-display font-bold tracking-wide text-sm">NETWORK & ACCESS</h2>
-                    <span className="flex-1 h-px bg-[#232323]"></span>
-                  </div>
+            {/* STEP 3: NETWORK & ACCESS */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-[rgba(139,92,246,0.15)]">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-xs font-mono font-bold text-purple-400">03</span>
+                  <h2 className="text-base font-bold text-white tracking-wide">NETWORK & ACCESS</h2>
+                </div>
 
-
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                    <Network className="w-4 h-4" /> Server Port
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    <Network className="w-4 h-4 text-purple-400" /> Server Port
                   </label>
-                  <div className="relative mb-4">
-                    <input 
-                      type="number" className={`inp font-mono ${portStatus === 'used' || portStatus === 'invalid' ? '!border-red-500/50' : portStatus === 'available' ? '!border-green-500/50' : ''}`} placeholder="25565" 
-                      value={state.port || ''} onChange={e => updateState('port', e.target.value ? Number(e.target.value) : '')}
+                  <div className="relative">
+                    <input
+                      type="number"
+                      className={`w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border ${
+                        portStatus === 'used' || portStatus === 'invalid'
+                          ? 'border-rose-500/80 focus:ring-rose-500/20'
+                          : portStatus === 'available'
+                          ? 'border-emerald-500/80 focus:ring-emerald-500/20'
+                          : 'border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6]'
+                      } text-[#f0f4ff] font-mono outline-none transition-all pr-28`}
+                      placeholder="25565"
+                      value={state.port || ''}
+                      onChange={e => updateState('port', e.target.value ? Number(e.target.value) : '')}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] tracking-widest flex items-center">
-                      {portStatus === 'checking' && <span className="text-[#8f8f8f]">CHECKING...</span>}
-                      {portStatus === 'available' && <span className="text-green-500">AVAILABLE</span>}
-                      {portStatus === 'used' && <span className="text-red-500">IN USE</span>}
-                      {portStatus === 'invalid' && <span className="text-red-500">INVALID</span>}
-                      {portStatus === 'error' && <span className="text-red-500">ERROR</span>}
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold flex items-center">
+                      {portStatus === 'checking' && <span className="text-[#94a3b8]">CHECKING…</span>}
+                      {portStatus === 'available' && <span className="text-emerald-400">AVAILABLE</span>}
+                      {portStatus === 'used' && <span className="text-rose-400">IN USE</span>}
+                      {portStatus === 'invalid' && <span className="text-rose-400">INVALID</span>}
+                      {portStatus === 'error' && <span className="text-amber-400">ERROR</span>}
                     </div>
                   </div>
-                  <p className="text-[11px] text-[#4c4c4c] -mt-2 mb-8 font-mono">
-                    {portStatus === 'used' ? "This port is already in use." : portStatus === 'invalid' ? "Port must be between 1 and 65535." : portStatus === 'error' ? "Could not verify this port. Try again." : "The main port the server will bind to. Must not be in use."}
-                  </p>
+                  <p className="text-xs text-[#64748b] mt-1.5">Primary listening port for player or HTTP connections</p>
+                </div>
 
-                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                    <Globe className="w-4 h-4" /> IP Alias
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    <Globe className="w-4 h-4 text-purple-400" /> IP Alias / Domain
                   </label>
-                  <input 
-                    type="text" className="inp font-mono" placeholder="play.example.com" 
-                    value={state.ip} onChange={e => updateState('ip', e.target.value)}
+                  <input
+                    type="text"
+                    className="w-full py-3 px-4 rounded-xl bg-[rgba(6,9,26,0.7)] border border-[rgba(139,92,246,0.2)] focus:border-[#8b5cf6] text-[#f0f4ff] font-mono outline-none"
+                    placeholder="play.example.com"
+                    value={state.ip}
+                    onChange={e => updateState('ip', e.target.value)}
                   />
-                  <p className="text-[11px] text-[#4c4c4c] mt-2 mb-8 font-mono">Optional custom domain or subdomain used to access your server.</p>
+                  <p className="text-xs text-[#64748b] mt-1.5">Optional friendly hostname displayed in server connection badge</p>
+                </div>
 
-                  {(user?.role === "admin" || user?.role === "owner") && (
-                    <>
-                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                        <User className="w-4 h-4" /> Assign Server Owner
+                {(user?.role === "admin" || user?.role === "owner") && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
+                    <div>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                        <User className="w-4 h-4 text-purple-400" /> Server Owner
                       </label>
                       <CustomDropdown
                         value={state.owner}
@@ -676,33 +643,31 @@ export default function CreateServer() {
                         placeholder="Select an owner..."
                         renderValue={(o: any) => (
                           <>
-                            <span className="w-8 h-8 rounded-full border border-[#232323] bg-[#0e0e0e] flex items-center justify-center font-display font-bold text-[11px] text-white shrink-0">
+                            <span className="w-7 h-7 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center font-bold text-xs text-purple-300 shrink-0">
                               {getInitials(o.name)}
                             </span>
-                            <span className="truncate text-white font-mono text-sm">{o.name} <span className="text-[#8f8f8f]">({o.tag})</span></span>
+                            <span className="truncate text-white text-sm">{o.name} <span className="text-[#64748b]">({o.tag})</span></span>
                           </>
                         )}
                         renderOption={(o: any, sel: boolean) => (
-                          <button type="button" className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors ${sel ? 'bg-white/5' : 'hover:bg-white/5'}`}>
-                            <span className="w-8 h-8 rounded-full border border-[#232323] bg-[#0e0e0e] flex items-center justify-center font-display font-bold text-[11px] text-white shrink-0">
+                          <button type="button" className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${sel ? 'bg-purple-600/20 text-white' : 'text-[#94a3b8] hover:bg-white/5'}`}>
+                            <span className="w-7 h-7 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center font-bold text-xs text-purple-300 shrink-0">
                               {getInitials(o.name)}
                             </span>
-                            <span className="flex-1 text-left font-mono">
-                              <span className="block text-sm text-white">{o.name} <span className="text-[#8f8f8f]">({o.tag})</span></span>
-                              <span className="block text-[11px] text-[#4c4c4c]">{o.role}</span>
-                            </span>
-                            {sel && <Check className="w-4 h-4 text-white" />}
+                            <div className="flex-1 text-left">
+                              <span className="block text-sm text-white font-medium">{o.name}</span>
+                              <span className="block text-[11px] text-[#64748b] capitalize">{o.role}</span>
+                            </div>
+                            {sel && <Check className="w-4 h-4 text-purple-400" />}
                           </button>
                         )}
                       />
-                      <p className="text-[11px] text-[#4c4c4c] mt-2 mb-8 font-mono">Select which user owns and has access to this server.</p>
-                      
-                      
+                    </div>
 
-
-    <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-      <Radio className="w-4 h-4" /> Deployment Node
-    </label>
+                    <div>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                        <Radio className="w-4 h-4 text-purple-400" /> Deployment Node
+                      </label>
                       <CustomDropdown
                         value={state.node}
                         options={nodes.map(n => ({ v: n.id, label: n.name + ' (' + n.ip + ')' }))}
@@ -710,211 +675,202 @@ export default function CreateServer() {
                         placeholder="Select a node..."
                         renderValue={(o: any) => (
                           <>
-                            <Radio className="w-4 h-4 text-white shrink-0" />
+                            <Radio className="w-4 h-4 text-purple-400 shrink-0" />
                             <span className="text-white truncate font-mono text-sm">{o.label}</span>
                           </>
                         )}
                         renderOption={(o: any, sel: boolean) => (
-                          <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 font-mono text-sm transition-colors ${sel ? 'text-white bg-white/5' : 'text-[#8f8f8f] hover:bg-white/5'}`}>
+                          <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg font-mono text-sm transition-colors ${sel ? 'text-white bg-purple-600/20' : 'text-[#94a3b8] hover:bg-white/5'}`}>
                             <span>{o.label}</span>
-                            {sel && <Check className="w-4 h-4 text-white" />}
+                            {sel && <Check className="w-4 h-4 text-purple-400" />}
                           </button>
                         )}
                       />
-                      <p className="text-[11px] text-[#4c4c4c] mt-2 font-mono">Physical node this container will be deployed to.</p>
-                    </>
-                  )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 4: SOFTWARE */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-[rgba(139,92,246,0.15)]">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-xs font-mono font-bold text-purple-400">04</span>
+                  <h2 className="text-base font-bold text-white tracking-wide">SOFTWARE & ENGINES</h2>
                 </div>
-              )}
 
-              {/* STEP 4: SOFTWARE */}
-              {currentStep === 3 && (
-                <div className="step-content space-y-6">
-                  <div>
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="font-mono text-xs text-[#4c4c4c]">04A</span>
-                      <h2 className="font-display font-bold tracking-wide text-sm text-white">MINECRAFT ENGINES</h2>
-                      <span className="flex-1 h-px bg-[#232323]"></span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                      {MINECRAFT_SOFTWARE.map(s => {
-                        const Icon = s.icon;
-                        return (
-                          <button 
-                            key={s.id} 
-                            type="button" 
-                            onClick={() => updateState('software', s.id)}
-                            className={`sel-card soft-card p-4 flex flex-col items-center text-center ${state.software === s.id ? 'selected' : ''}`}
-                          >
-                            <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
-                            <Icon className="ic w-6 h-6 mb-2.5" />
-                            <span className="font-display font-semibold text-sm text-white">{s.name}</span>
-                            <span className="text-[10px] text-[#4c4c4c] mt-1 leading-tight">{s.desc}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="font-mono text-xs text-[#4c4c4c]">04B</span>
-                      <h2 className="font-display font-bold tracking-wide text-sm text-white">APPLICATION & SCRIPT RUNTIMES</h2>
-                      <span className="text-[10px] font-mono uppercase bg-white/10 px-2 py-0.5 rounded text-white tracking-widest">Non-Minecraft</span>
-                      <span className="flex-1 h-px bg-[#232323]"></span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {APPLICATION_SOFTWARE.map(s => {
-                        const Icon = s.icon;
-                        return (
-                          <button 
-                            key={s.id} 
-                            type="button" 
-                            onClick={() => updateState('software', s.id)}
-                            className={`sel-card soft-card p-4 flex items-center gap-4 text-left ${state.software === s.id ? 'selected' : ''}`}
-                          >
-                            <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
-                            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                              <Icon className="ic w-5 h-5 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-display font-semibold text-sm text-white">{s.name}</span>
-                                <span className="text-[9px] font-mono bg-white/10 text-white/80 px-1.5 py-0.5 rounded">Standalone</span>
-                              </div>
-                              <span className="text-[11px] text-[#8f8f8f] block mt-0.5 leading-snug">{s.desc}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {['nodejs', 'python'].includes(state.software) && (
-                      <div className="mt-3 p-3 bg-white/[0.03] border border-white/10 rounded-lg flex items-start gap-2.5">
-                        <Info className="w-4 h-4 text-[#8f8f8f] shrink-0 mt-0.5" />
-                        <p className="text-xs text-[#8f8f8f] font-mono leading-relaxed">
-                          Standalone runtime selected: Minecraft game features will be disabled. You will be able to upload your code files (such as <span className="text-white">index.js</span> or <span className="text-white">main.py</span>) via File Manager and start them in the Console.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
-                      <GitBranch className="w-4 h-4" /> {['nodejs', 'python'].includes(state.software) ? 'Runtime Version' : 'Software Version'}
-                    </label>
-                    <CustomDropdown
-                      value={state.version}
-                      options={versions.map(v => ({ v, label: v }))}
-                      onChange={(v: string) => updateState('version', v)}
-                      placeholder="Select a version..."
-                      renderValue={(o: any) => (
-                        <>
-                          <GitBranch className="w-4 h-4 text-white shrink-0" />
-                          <span className="font-mono text-white text-sm">{o.label}</span>
-                        </>
-                      )}
-                      renderOption={(o: any, sel: boolean) => (
-                        <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 font-mono text-sm transition-colors ${sel ? 'text-white bg-white/5' : 'text-[#8f8f8f] hover:bg-white/5'}`}>
-                          <span>{o.label}</span>
-                          {sel && <Check className="w-4 h-4 text-white" />}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-3">Minecraft Engines</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    {MINECRAFT_SOFTWARE.map(s => {
+                      const Icon = s.icon;
+                      const isSel = state.software === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => updateState('software', s.id)}
+                          className={`p-4 rounded-xl border flex flex-col items-center text-center transition-all ${
+                            isSel
+                              ? 'border-[#8b5cf6] bg-[rgba(124,58,237,0.18)] shadow-[0_0_20px_-4px_rgba(124,58,237,0.5)]'
+                              : 'border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] hover:border-[rgba(139,92,246,0.35)]'
+                          }`}
+                        >
+                          <Icon className={`w-6 h-6 mb-2 ${isSel ? 'text-purple-400' : 'text-[#64748b]'}`} />
+                          <span className="font-bold text-sm text-[#f0f4ff]">{s.name}</span>
+                          <span className="text-[10px] text-[#94a3b8] mt-1 leading-tight">{s.desc}</span>
                         </button>
-                      )}
-                    />
+                      );
+                    })}
                   </div>
                 </div>
-              )}
 
-              {/* STEP 5: REVIEW */}
-              {currentStep === 4 && (
-                <div className="step-content">
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className="font-mono text-xs text-[#4c4c4c]">05</span>
-                    <h2 className="font-display font-bold tracking-wide text-sm">FINAL SPECIFICATION</h2>
-                    <span className="flex-1 h-px bg-[#232323]"></span>
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-3">Application & Script Runtimes</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {APPLICATION_SOFTWARE.map(s => {
+                      const Icon = s.icon;
+                      const isSel = state.software === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => updateState('software', s.id)}
+                          className={`p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                            isSel
+                              ? 'border-[#8b5cf6] bg-[rgba(124,58,237,0.18)] shadow-[0_0_20px_-4px_rgba(124,58,237,0.5)]'
+                              : 'border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] hover:border-[rgba(139,92,246,0.35)]'
+                          }`}
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isSel ? 'bg-purple-600/30 text-purple-300' : 'bg-white/5 text-[#64748b]'}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-sm text-[#f0f4ff]">{s.name}</span>
+                            <span className="text-xs text-[#94a3b8] block mt-0.5">{s.desc}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  
-                  {!deployed && deployProgress === 0 && (
-                    <>
-                      <div className="font-mono text-[13px] divide-y divide-[#232323] border border-[#232323] bg-[#0e0e0e]">
-                        {renderReviewRow('INSTANCE', state.name || '—')}
-  {renderReviewRow('RUNTIME', state.runtimeType === 'local' ? 'Local Process (Beta)' : 'Docker')}
-                        {renderReviewRow('DESCRIPTION', state.desc || '—')}
-                        {renderReviewRow('PORT', String(state.port))}
-                        {renderReviewRow('RAM', state.ram + ' GB')}
-                        {renderReviewRow('CPU ' + (state.auto ? '(AUTO)' : '(MANUAL)'), state.cpu + ' %')}
-                        {renderReviewRow('DISK', state.disk + ' GB')}
-                        {renderReviewRow('IP ALIAS', state.ip || '—')}
-                        {(user?.role === "admin" || user?.role === "owner") && renderReviewRow('OWNER ID', state.owner || '—')}
-                        {(user?.role === "admin" || user?.role === "owner") && renderReviewRow('NODE ID', state.node || '—')}
-                        {renderReviewRow('SOFTWARE', SOFTWARE.find(s => s.id === state.software)?.name || 'Unknown')}
-                        {renderReviewRow('VERSION', state.version || 'latest')}
-                        
-                        <div className="px-4 py-4">
-                          <div className="flex justify-between text-[10px] text-[#4c4c4c] tracking-widest mb-2 font-mono">
-                            <span>EST. HOST FOOTPRINT</span>
-                            <span>{Math.min(100, Math.round(state.ram / 32 * 100))}%</span>
-                          </div>
-                          <div className="w-full bg-[#232323] h-1.5 overflow-hidden">
-                            <div className="h-full bg-white transition-all duration-500" style={{ width: `${Math.min(100, Math.round(state.ram / 32 * 100))}%` }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {deployProgress > 0 && !deployed && (
-                    <div className="mt-6 border border-[#232323] bg-[#0e0e0e] p-4">
-                      <div className="flex justify-between items-center mb-2.5">
-                        <span className="text-sm font-mono text-[#8f8f8f]">Provisioning container...</span>
-                        <span className="text-sm font-mono text-white">{Math.round(deployProgress)}%</span>
-                      </div>
-                      <div className="w-full bg-[#232323] h-1.5 overflow-hidden">
-                        <div className="h-full bg-white transition-all duration-300" style={{ width: `${deployProgress}%` }}></div>
-                      </div>
-                    </div>
-                  )}
-
-                  {deployed && (
-                    <div className="mt-6 border border-white bg-white/5 p-6 text-center">
-                      <div className="w-12 h-12 mx-auto mb-3 bg-white text-black flex items-center justify-center">
-                        <Check className="w-6 h-6 stroke-[3]" />
-                      </div>
-                      <p className="font-display font-bold text-lg">Instance Deployed</p>
-                      <p className="text-[#8f8f8f] text-sm mt-1 font-mono">
-                        {state.name} → {state.ram}GB
-                      </p>
-                    </div>
-                  )}
                 </div>
-              )}
-            </div>
 
-            {/* NAV */}
-            <div className="flex items-center justify-between gap-3 mt-9 pt-7 border-t border-[#232323]">
-              <button 
-                type="button" 
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    <GitBranch className="w-4 h-4 text-purple-400" />
+                    {['nodejs', 'python'].includes(state.software) ? 'Runtime Version' : 'Software Version'} (Auto-Installs on Creation)
+                  </label>
+                  <CustomDropdown
+                    value={state.version}
+                    options={versions.map(v => ({ v, label: v }))}
+                    onChange={(v: string) => updateState('version', v)}
+                    placeholder="Select a version..."
+                    renderValue={(o: any) => (
+                      <>
+                        <GitBranch className="w-4 h-4 text-purple-400 shrink-0" />
+                        <span className="font-mono text-white text-sm">{o.label}</span>
+                      </>
+                    )}
+                    renderOption={(o: any, sel: boolean) => (
+                      <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg font-mono text-sm transition-colors ${sel ? 'text-white bg-purple-600/20' : 'text-[#94a3b8] hover:bg-white/5'}`}>
+                        <span>{o.label}</span>
+                        {sel && <Check className="w-4 h-4 text-purple-400" />}
+                      </button>
+                    )}
+                  />
+                  <p className="text-xs text-purple-400/80 mt-1.5 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Selected version will automatically install during deployment.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: REVIEW */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-[rgba(139,92,246,0.15)]">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-xs font-mono font-bold text-purple-400">05</span>
+                  <h2 className="text-base font-bold text-white tracking-wide">FINAL SPECIFICATION & DEPLOY</h2>
+                </div>
+
+                {!deployed && deployProgress === 0 && (
+                  <div className="rounded-xl border border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] overflow-hidden">
+                    {renderReviewRow('INSTANCE NAME', state.name || '—')}
+                    {renderReviewRow('RUNTIME', state.runtimeType === 'local' ? 'Local Process' : 'Docker Container')}
+                    {renderReviewRow('PORT', String(state.port))}
+                    {renderReviewRow('RAM LIMIT', `${state.ram} GB`)}
+                    {renderReviewRow('CPU LIMIT', `${state.cpu}% ${state.auto ? '(Auto-Tuned)' : '(Manual)'}`)}
+                    {renderReviewRow('DISK LIMIT', `${state.disk} GB`)}
+                    {renderReviewRow('SOFTWARE ENGINE', SOFTWARE.find(s => s.id === state.software)?.name || state.software)}
+                    {renderReviewRow('VERSION (AUTO-INSTALL)', state.version || 'latest')}
+                    {state.ip && renderReviewRow('IP ALIAS', state.ip)}
+
+                    <div className="p-4 border-t border-[rgba(139,92,246,0.15)] bg-[rgba(124,58,237,0.05)]">
+                      <div className="flex justify-between text-xs text-[#94a3b8] mb-2 font-medium">
+                        <span>Host Resource Footprint</span>
+                        <span>{Math.min(100, Math.round(state.ram / 32 * 100))}%</span>
+                      </div>
+                      <div className="w-full bg-[rgba(6,9,26,0.8)] h-2 rounded-full overflow-hidden border border-[rgba(139,92,246,0.15)]">
+                        <div
+                          className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.round(state.ram / 32 * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {deployProgress > 0 && !deployed && (
+                  <div className="p-6 rounded-xl border border-[rgba(139,92,246,0.3)] bg-[rgba(6,9,26,0.8)] text-center">
+                    <div className="flex justify-between items-center mb-3 text-sm">
+                      <span className="text-[#94a3b8]">Deploying and installing {state.software} ({state.version})…</span>
+                      <span className="font-mono font-bold text-purple-400">{Math.round(deployProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-[rgba(10,14,36,0.9)] h-2.5 rounded-full overflow-hidden border border-[rgba(139,92,246,0.2)]">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-600 via-indigo-500 to-cyan-400 transition-all duration-300 rounded-full"
+                        style={{ width: `${deployProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {deployed && (
+                  <div className="p-8 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-center">
+                    <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                      <Check className="w-7 h-7 stroke-[3]" />
+                    </div>
+                    <h3 className="text-xl font-bold text-[#f0f4ff]">Server Successfully Deployed!</h3>
+                    <p className="text-sm text-[#94a3b8] mt-1">Redirecting to servers dashboard…</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step Navigation Actions */}
+            <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-[rgba(139,92,246,0.18)]">
+              <button
+                type="button"
                 onClick={() => { if (currentStep > 0) showStep(currentStep - 1); }}
                 disabled={currentStep === 0 || deployed || deployProgress > 0}
-                className="btn-ghost px-5 py-3 text-sm font-medium flex items-center gap-2"
+                className="px-5 py-2.5 rounded-xl border border-[rgba(139,92,246,0.2)] bg-[rgba(6,9,26,0.5)] text-sm font-semibold text-[#94a3b8] hover:text-[#f0f4ff] hover:border-[rgba(139,92,246,0.4)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                <ArrowLeft className="w-4 h-4" /> BACK
+                <ArrowLeft className="w-4 h-4" /> Back
               </button>
-              
-              <span className="font-mono text-[11px] tracking-widest text-[#4c4c4c] hidden sm:block">
-                STEP {currentStep + 1} / {STEPS.length}
+
+              <span className="text-xs text-[#64748b] font-mono hidden sm:block">
+                Step {currentStep + 1} of {STEPS.length}
               </span>
-              
-              <button 
-                type="button" 
+
+              <button
+                type="button"
                 onClick={handleNext}
-                disabled={deployed || deployProgress > 0 || isCheckingPort}
-                className="btn-white px-7 py-3 text-sm font-display font-bold tracking-widest flex items-center gap-2"
+                disabled={deployed || deployProgress > 0}
+                className="px-7 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm tracking-wide shadow-[0_0_24px_-4px_rgba(124,58,237,0.6)] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 active:scale-95"
               >
-                <span>{isCheckingPort ? 'CHECKING...' : currentStep === STEPS.length - 1 ? (deployed ? 'DEPLOYED' : 'LAUNCH') : 'NEXT'}</span>
-                {isCheckingPort ? null : currentStep === STEPS.length - 1 ? <Rocket className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4 rotate-180" />}
+                <span>{currentStep === STEPS.length - 1 ? (deployed ? 'Deployed' : 'Deploy Server') : 'Continue'}</span>
+                {currentStep === STEPS.length - 1 ? <Rocket className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4 rotate-180" />}
               </button>
             </div>
           </div>
