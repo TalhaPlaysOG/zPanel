@@ -21,8 +21,6 @@ DEFAULT_INSTALL_DIR="/opt/zpanel"
 PM2_APP_NAME="zpanel"
 PANEL_PORT="6767"
 CF_SERVICE="cloudflared"
-CF_CONFIG_DIR="/etc/cloudflared"
-CF_ENV_FILE="/etc/cloudflared/tunnel.env"
 
 # ─────────────────────────────────────────────
 #  TERMINAL COLORS & STYLES
@@ -319,52 +317,7 @@ install_java_25_auto() {
     fi
 }
 
-# ─────────────────────────────────────────────
-#  CLOUDFLARED BINARY INSTALLATION
-# ─────────────────────────────────────────────
-install_cloudflared_binary() {
-    if command -v cloudflared &>/dev/null; then
-        CF_VER=$(cloudflared --version 2>/dev/null | awk '{print $3}' | head -1)
-        log_success "cloudflared is ready (version: ${CF_VER:-latest})."
-        return 0
-    fi
 
-    log_step "Installing Cloudflare Tunnel client (cloudflared)..."
-
-    # Debian/Ubuntu apt repo
-    if [ "$PKG_MGR" = "apt" ]; then
-        curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | $SUDO tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null 2>&1 || true
-        echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared jammy main' \
-            | $SUDO tee /etc/apt/sources.list.d/cloudflared.list >/dev/null 2>&1 || true
-        $SUDO apt-get update -y >/dev/null 2>&1 || true
-        $SUDO apt-get install -y cloudflared >/dev/null 2>&1 || true
-    fi
-
-    # Fallback to official binary release
-    if ! command -v cloudflared &>/dev/null; then
-        log_info "Downloading standalone cloudflared binary release..."
-        ARCH=$(uname -m)
-        case "$ARCH" in
-            x86_64)  CF_ARCH="amd64" ;;
-            aarch64) CF_ARCH="arm64" ;;
-            armv7l)  CF_ARCH="arm" ;;
-            *)       CF_ARCH="amd64" ;;
-        esac
-        curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /tmp/cloudflared 2>/dev/null || true
-        if [ -f "/tmp/cloudflared" ]; then
-            $SUDO install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
-            rm -f /tmp/cloudflared
-        fi
-    fi
-
-    if command -v cloudflared &>/dev/null; then
-        log_success "cloudflared installed: $(cloudflared --version 2>/dev/null | head -1)"
-        return 0
-    else
-        log_error "cloudflared installation failed. Check network access or install cloudflared manually."
-        return 1
-    fi
-}
 
 # ─────────────────────────────────────────────
 #  SETUP APPLICATION ENVIRONMENT (.env)
@@ -565,359 +518,368 @@ ECOSYSTEM
 }
 
 # ─────────────────────────────────────────────
-#  [2] CLOUDFLARE TUNNEL SUBMENU
+#  [2] CLOUDFLARE TUNNEL
 # ─────────────────────────────────────────────
 
-# Helper: Configure token-based tunnel systemd service
-setup_cloudflared_token_service() {
-    local token="$1"
-    local cf_bin
-    cf_bin=$(command -v cloudflared)
-    [ -z "$cf_bin" ] && cf_bin="/usr/local/bin/cloudflared"
+# Step 1: Install cloudflared
+install_cloudflared() {
+    # Check whether cloudflared is already installed before installing it again
+    if command -v cloudflared &>/dev/null; then
+        log_success "cloudflared is already installed: $(cloudflared --version 2>/dev/null | head -1)"
+        return 0
+    fi
 
-    $SUDO mkdir -p "$CF_CONFIG_DIR"
+    log_step "Installing cloudflared..."
+    check_privileges
 
-    # Store token with strict root permissions (chmod 600)
-    $SUDO bash -c "printf 'TUNNEL_TOKEN=%s\n' '$token' > $CF_ENV_FILE"
-    $SUDO chmod 600 "$CF_ENV_FILE"
-    $SUDO chown root:root "$CF_ENV_FILE" 2>/dev/null || true
+    if ! command -v apt-get &>/dev/null; then
+        log_error "apt-get is required to install cloudflared via official Cloudflare repository."
+        return 1
+    fi
 
-    # Write persistent systemd service
-    $SUDO bash -c "cat > /etc/systemd/system/${CF_SERVICE}.service" << SVCEOF
-[Unit]
-Description=Cloudflare Tunnel Connector for zPanel
-After=network-online.target
-Wants=network-online.target
+    if ! $SUDO mkdir -p --mode=0755 /usr/share/keyrings; then
+        log_error "Failed to create directory /usr/share/keyrings"
+        return 1
+    fi
 
-[Service]
-Type=simple
-User=root
-EnvironmentFile=-/etc/cloudflared/tunnel.env
-ExecStart=${cf_bin} tunnel --no-autoupdate run --token \${TUNNEL_TOKEN}
-Restart=on-failure
-RestartSec=5s
-StandardOutput=journal
-StandardError=journal
+    if ! $SUDO curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg; then
+        log_error "Failed to download Cloudflare GPG key"
+        return 1
+    fi
 
-[Install]
-WantedBy=multi-user.target
-SVCEOF
+    if ! $SUDO chmod 0644 /usr/share/keyrings/cloudflare-main.gpg; then
+        log_error "Failed to set permissions on /usr/share/keyrings/cloudflare-main.gpg"
+        return 1
+    fi
 
-    $SUDO systemctl daemon-reload
-    $SUDO systemctl enable "$CF_SERVICE" 2>/dev/null || true
-    $SUDO systemctl restart "$CF_SERVICE"
-    sleep 3
+    if ! $SUDO bash -c "echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' > /etc/apt/sources.list.d/cloudflared.list"; then
+        log_error "Failed to create /etc/apt/sources.list.d/cloudflared.list"
+        return 1
+    fi
 
-    if $SUDO systemctl is-active --quiet "$CF_SERVICE"; then
+    if ! $SUDO apt-get update; then
+        log_error "Failed to update package lists (apt-get update)"
+        return 1
+    fi
+
+    if ! $SUDO apt-get install -y cloudflared; then
+        log_error "Failed to install cloudflared package"
+        return 1
+    fi
+
+    if command -v cloudflared &>/dev/null; then
+        log_success "cloudflared installed successfully: $(cloudflared --version 2>/dev/null | head -1)"
         return 0
     else
+        log_error "cloudflared binary not found after installation."
         return 1
     fi
 }
 
-# 2.1 Configure / Connect Tunnel
-cf_configure_tunnel() {
+# Step 2 & Step 3: Ask for Tunnel Token & Connect Automatically
+setup_cloudflare_tunnel() {
+    # Never expose token through shell tracing
+    set +x
+
+    # Step 2: Ask for the Tunnel Token
     print_banner
-    echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Configure / Connect${NC}\n"
+    echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL SETUP${NC}\n"
     log_divider
-
-    check_privileges
-    install_cloudflared_binary || return 1
-
-    # Check for existing configuration
-    if [ -f "$CF_ENV_FILE" ]; then
-        echo ""
-        log_warning "An existing Cloudflare Tunnel configuration was detected."
-        echo -e "  ${YELLOW}Overwrite with a new tunnel token? [y/N]:${NC} \c"
-        read -r OVERWRITE_CF
-        if [[ ! "$OVERWRITE_CF" =~ ^[Yy]$ ]]; then
-            log_info "Configuration preserved."
-            return 0
-        fi
-        TS=$(date +%Y%m%d_%H%M%S)
-        $SUDO cp "$CF_ENV_FILE" "${CF_ENV_FILE}.bak_${TS}" 2>/dev/null || true
-    fi
-
     echo ""
-    echo -e "  ${CYAN}Paste your Cloudflare Tunnel Token below:${NC}"
-    echo -e "  ${DIM}(From Cloudflare Zero Trust → Networks → Tunnels → Install connector)${NC}"
-    echo -e "  ${DIM}(Input is masked for security)${NC}"
-    echo -e "  ${BOLD}Tunnel Token:${NC} \c"
-    read -rs INPUT_TOKEN
+    echo "  Paste your Cloudflare Tunnel token below."
+    echo "  Get your token from your existing tunnel in the Cloudflare Zero Trust dashboard."
     echo ""
+    echo -ne "  ${BOLD}Tunnel Token:${NC} "
+    read -r TUNNEL_TOKEN
 
-    if [ -z "$INPUT_TOKEN" ]; then
+    # Validate that the input is not empty
+    TUNNEL_TOKEN="$(echo "$TUNNEL_TOKEN" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ -z "$TUNNEL_TOKEN" ]; then
         log_error "Tunnel token cannot be empty."
         return 1
     fi
 
-    log_step "Starting Cloudflare Tunnel service with supplied token..."
-    if ! setup_cloudflared_token_service "$INPUT_TOKEN"; then
-        log_error "Cloudflare Tunnel service failed to start."
-        log_info "Check logs using: sudo journalctl -u cloudflared -n 30"
+    # Step 3: Connect Automatically
+    log_step "Configuring Cloudflare Tunnel service..."
+    check_privileges
+
+    # Handle an existing cloudflared service without creating duplicate services
+    if systemctl list-unit-files 2>/dev/null | grep -q "^cloudflared\.service" || [ -f /etc/systemd/system/cloudflared.service ] || [ -f /lib/systemd/system/cloudflared.service ]; then
+        log_info "Existing cloudflared service detected. Safely removing old service..."
+        $SUDO systemctl stop cloudflared 2>/dev/null || true
+        $SUDO cloudflared service uninstall 2>/dev/null || true
+        $SUDO rm -f /etc/systemd/system/cloudflared.service /etc/systemd/system/multi-user.target.wants/cloudflared.service 2>/dev/null || true
+        $SUDO systemctl daemon-reload 2>/dev/null || true
+    fi
+
+    # Execute official cloudflared service install safely without printing or logging the token
+    local INSTALL_OUT
+    INSTALL_OUT=$($SUDO cloudflared service install "$TUNNEL_TOKEN" 2>&1)
+    local INSTALL_CODE=$?
+
+    if [ $INSTALL_CODE -ne 0 ]; then
+        local REDACTED_ERR
+        REDACTED_ERR=$(echo "$INSTALL_OUT" | sed "s|${TUNNEL_TOKEN}|[REDACTED_TOKEN]|g")
+        log_error "Failed to install cloudflared service."
+        [ -n "$REDACTED_ERR" ] && echo -e "  ${RED}${REDACTED_ERR}${NC}"
         return 1
     fi
 
-    # Display exact Cloudflare Zero Trust Dashboard Instructions
-    while true; do
-        clear
-        echo -e "${CYAN}${BOLD}"
-        echo "  ╔══════════════════════════════════════════════════════════════╗"
-        echo "  ║                      CLOUDFLARE TUNNEL                       ║"
-        echo "  ║                  Tunnel service configured.                  ║"
-        echo "  ╚══════════════════════════════════════════════════════════════╝"
-        echo -e "${NC}"
-        echo -e "  ${BOLD}NEXT STEP:${NC}"
-        echo -e "    1. Open your Cloudflare Zero Trust dashboard."
-        echo -e "    2. Select the tunnel associated with your token."
-        echo -e "    3. Configure the public hostname or published application."
-        echo -e "    4. Set the origin service to: ${GREEN}${BOLD}http://127.0.0.1:6767${NC}"
-        echo -e "    5. Save the configuration in Cloudflare."
-        echo -e "    6. Return to this installer and select Continue."
-        echo ""
-        log_divider
-        echo -e "    ${BOLD}[C]${NC} Continue"
-        echo -e "    ${BOLD}[R]${NC} Recheck Connection"
-        echo -e "    ${BOLD}[B]${NC} Back to Menu"
-        echo ""
-        log_divider
-        echo -e "  \c"
-        read -p "Select an option [C/R/B]: " NEXT_ACTION
+    # Enable and start the service as required
+    $SUDO systemctl daemon-reload 2>/dev/null || true
+    $SUDO systemctl enable cloudflared 2>/dev/null || true
+    $SUDO systemctl restart cloudflared 2>/dev/null || $SUDO systemctl start cloudflared 2>/dev/null || true
 
-        case "$NEXT_ACTION" in
-            [Cc])
-                echo ""
-                log_step "Verifying tunnel connector and local panel responsiveness..."
-                local PANEL_OK=false
-                local TUNNEL_OK=false
+    # Verify actual service status and connection after installation
+    log_step "Verifying tunnel connection status..."
+    local IS_CONNECTED=false
+    local ERROR_MSG=""
 
-                if curl -fsSL --max-time 2 "http://127.0.0.1:$PANEL_PORT" &>/dev/null; then
-                    PANEL_OK=true
-                    log_success "Local zPanel application: Responding on port $PANEL_PORT."
-                else
-                    log_warning "Local zPanel application: Port $PANEL_PORT not responding yet."
-                fi
+    for ((i=1; i<=15; i++)); do
+        sleep 1
 
-                if systemctl is-active --quiet "$CF_SERVICE" 2>/dev/null; then
-                    TUNNEL_OK=true
-                    log_success "Cloudflare Tunnel service: Active and running."
-                else
-                    log_error "Cloudflare Tunnel service: Inactive or failed."
-                fi
+        if ! systemctl is-active --quiet cloudflared 2>/dev/null; then
+            ERROR_MSG="cloudflared service stopped unexpectedly."
+            local JERR
+            JERR=$(journalctl -u cloudflared -n 15 --no-pager 2>/dev/null | grep -iE 'error|fatal|unauthorized|failed' | tail -n 5)
+            [ -n "$JERR" ] && ERROR_MSG="$ERROR_MSG"$'\n'"$JERR"
+            IS_CONNECTED=false
+            break
+        fi
 
-                echo ""
-                if $PANEL_OK && $TUNNEL_OK; then
-                    log_success "Tunnel service is active! Your configured Cloudflare hostname can now reach zPanel."
-                else
-                    log_warning "Setup complete with notices. Verify your Cloudflare Zero Trust Public Hostname routing to http://127.0.0.1:6767."
-                fi
-                echo ""
-                read -p "  Press Enter to continue..."
-                break
-                ;;
-            [Rr])
-                log_step "Checking connector status..."
-                if systemctl is-active --quiet "$CF_SERVICE" 2>/dev/null; then
-                    log_success "Tunnel service is active."
-                else
-                    log_warning "Tunnel service is not active. Attempting restart..."
-                    $SUDO systemctl restart "$CF_SERVICE"
-                fi
-                sleep 2
-                ;;
-            [Bb]|*)
-                break
-                ;;
-        esac
+        local JLOGS
+        JLOGS=$(journalctl -u cloudflared -n 30 --no-pager 2>/dev/null)
+
+        if echo "$JLOGS" | grep -qiE 'registered tunnel connection|connection [0-9a-f-]+ registered|registered connindex'; then
+            IS_CONNECTED=true
+            break
+        fi
+
+        if echo "$JLOGS" | grep -qiE 'unauthorized|cannot fetch tunnel|invalid token|validation failed|quitting due to error'; then
+            ERROR_MSG=$(echo "$JLOGS" | grep -iE 'error|fatal|unauthorized|failed' | tail -n 5)
+            IS_CONNECTED=false
+            break
+        fi
     done
+
+    if [ "$IS_CONNECTED" = false ] && [ -z "$ERROR_MSG" ]; then
+        if systemctl is-active --quiet cloudflared 2>/dev/null; then
+            local JLOGS
+            JLOGS=$(journalctl -u cloudflared -n 30 --no-pager 2>/dev/null)
+            if echo "$JLOGS" | grep -qiE 'error|fatal|unauthorized|failed'; then
+                ERROR_MSG=$(echo "$JLOGS" | grep -iE 'error|fatal|unauthorized|failed' | tail -n 5)
+                IS_CONNECTED=false
+            else
+                IS_CONNECTED=true
+            fi
+        else
+            ERROR_MSG="Service is inactive or failed to start."
+            IS_CONNECTED=false
+        fi
+    fi
+
+    # If the tunnel fails to connect, show the actual error and allow the user to retry
+    if [ "$IS_CONNECTED" = false ]; then
+        local CLEAN_MSG
+        CLEAN_MSG=$(echo "$ERROR_MSG" | sed "s|${TUNNEL_TOKEN}|[REDACTED_TOKEN]|g")
+        log_error "Cloudflare Tunnel failed to connect."
+        [ -n "$CLEAN_MSG" ] && echo -e "  ${RED}${CLEAN_MSG}${NC}"
+        echo ""
+        echo -ne "  ${YELLOW}Would you like to retry? [Y/n]:${NC} "
+        read -r RETRY_INPUT
+        if [[ ! "$RETRY_INPUT" =~ ^[Nn]$ ]]; then
+            setup_cloudflare_tunnel
+            return $?
+        else
+            return 1
+        fi
+    fi
+
+    log_success "Cloudflare Tunnel connected successfully."
+    return 0
 }
 
-# 2.2 Check Tunnel Status
+# Check Tunnel Status
 cf_check_status() {
     print_banner
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL STATUS${NC}\n"
     log_divider
     echo ""
 
-    # 1. cloudflared
     if command -v cloudflared &>/dev/null; then
-        echo -e "  ${BOLD}cloudflared${NC}       : ${GREEN}Installed${NC}"
+        echo -e "  ${BOLD}Installation${NC}   : ${GREEN}Completed${NC} ($(cloudflared --version 2>/dev/null | awk '{print $3}' | head -1))"
     else
-        echo -e "  ${BOLD}cloudflared${NC}       : ${RED}Not installed${NC}"
+        echo -e "  ${BOLD}Installation${NC}   : ${RED}Not Installed${NC}"
     fi
 
-    # 2. Tunnel Service
     local SVC_ACTIVE=false
-    if command -v systemctl &>/dev/null; then
-        if systemctl is-active --quiet "$CF_SERVICE" 2>/dev/null; then
-            SVC_ACTIVE=true
-            echo -e "  ${BOLD}Tunnel Service${NC}    : ${GREEN}Active${NC}"
-        else
-            echo -e "  ${BOLD}Tunnel Service${NC}    : ${RED}Inactive${NC}"
-        fi
+    if command -v systemctl &>/dev/null && systemctl is-active --quiet cloudflared 2>/dev/null; then
+        SVC_ACTIVE=true
+        echo -e "  ${BOLD}Service${NC}        : ${GREEN}Running${NC}"
     else
-        echo -e "  ${BOLD}Tunnel Service${NC}    : ${YELLOW}systemd not available${NC}"
+        echo -e "  ${BOLD}Service${NC}        : ${RED}Inactive / Stopped${NC}"
     fi
 
-    # 3. Panel Process
-    if command -v pm2 &>/dev/null; then
-        PM2_STAT=$(pm2 jlist 2>/dev/null | grep -o '"name":"zpanel"[^}]*"status":"[^"]*"' | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-        if [ "$PM2_STAT" = "online" ]; then
-            echo -e "  ${BOLD}Panel Process${NC}     : ${GREEN}Running${NC}"
-        else
-            echo -e "  ${BOLD}Panel Process${NC}     : ${YELLOW}${PM2_STAT:-stopped}${NC}"
-        fi
+    if command -v systemctl &>/dev/null && systemctl is-enabled --quiet cloudflared 2>/dev/null; then
+        echo -e "  ${BOLD}Auto Startup${NC}   : ${GREEN}Enabled${NC}"
     else
-        echo -e "  ${BOLD}Panel Process${NC}     : ${YELLOW}PM2 not installed${NC}"
+        echo -e "  ${BOLD}Auto Startup${NC}   : ${YELLOW}Disabled${NC}"
     fi
 
-    # 4. Automatic Startup
-    if command -v systemctl &>/dev/null && systemctl is-enabled --quiet "$CF_SERVICE" 2>/dev/null; then
-        echo -e "  ${BOLD}Automatic Startup${NC} : ${GREEN}Enabled${NC}"
-    else
-        echo -e "  ${BOLD}Automatic Startup${NC} : ${YELLOW}Disabled / Not configured${NC}"
-    fi
-
-    # 5. Connection
     if $SVC_ACTIVE; then
-        echo -e "  ${BOLD}Connection${NC}        : ${GREEN}Connected${NC}"
+        local JLOGS
+        JLOGS=$(journalctl -u cloudflared -n 30 --no-pager 2>/dev/null)
+        if echo "$JLOGS" | grep -qiE 'error|fatal|unauthorized|failed' && ! echo "$JLOGS" | grep -qiE 'registered tunnel connection|connection [0-9a-f-]+ registered'; then
+            echo -e "  ${BOLD}Connection${NC}     : ${RED}Failed to Connect${NC}"
+            local ERR_SNIP
+            ERR_SNIP=$(echo "$JLOGS" | grep -iE 'error|fatal|unauthorized|failed' | tail -n 2)
+            [ -n "$ERR_SNIP" ] && echo -e "  ${RED}${ERR_SNIP}${NC}"
+        else
+            echo -e "  ${BOLD}Connection${NC}     : ${GREEN}Connected${NC}"
+        fi
     else
-        echo -e "  ${BOLD}Connection${NC}        : ${RED}Disconnected${NC}"
+        echo -e "  ${BOLD}Connection${NC}     : ${RED}Disconnected${NC}"
     fi
 
     echo ""
     log_divider
 }
 
-# 2.3 Restart Tunnel
-cf_restart_tunnel() {
-    print_banner
-    echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Restart${NC}\n"
-    log_divider
-    check_privileges
-
-    if ! command -v systemctl &>/dev/null; then
-        log_error "systemd is not available."
-        return 1
-    fi
-
-    if ! systemctl list-unit-files | grep -q "${CF_SERVICE}.service"; then
-        log_error "Cloudflare Tunnel service is not configured yet."
-        return 1
-    fi
-
-    log_step "Restarting Cloudflare Tunnel service..."
-    $SUDO systemctl restart "$CF_SERVICE"
-    sleep 2
-
-    if $SUDO systemctl is-active --quiet "$CF_SERVICE"; then
-        log_success "Cloudflare Tunnel restarted successfully."
-    else
-        log_error "Tunnel failed to restart. Check: sudo journalctl -u cloudflared -n 30"
-    fi
-}
-
-# 2.4 Stop Tunnel
-cf_stop_tunnel() {
-    print_banner
-    echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Stop${NC}\n"
-    log_divider
-    check_privileges
-
-    echo -e "  ${YELLOW}Stopping the tunnel will disable public access via Cloudflare.${NC}"
-    echo -e "  ${YELLOW}The local zPanel application will continue running on http://127.0.0.1:6767.${NC}"
-    echo -e "  ${BOLD}Stop the tunnel? [y/N]:${NC} \c"
-    read -r CONFIRM_STOP
-
-    if [[ ! "$CONFIRM_STOP" =~ ^[Yy]$ ]]; then
-        log_info "Operation cancelled."
-        return 0
-    fi
-
-    $SUDO systemctl stop "$CF_SERVICE" 2>/dev/null || true
-    log_success "Cloudflare Tunnel stopped. zPanel is still active locally."
-}
-
-# 2.5 Reconnect Tunnel
+# Reconnect Tunnel
 cf_reconnect_tunnel() {
     print_banner
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Reconnect${NC}\n"
     log_divider
     check_privileges
 
-    if [ ! -f "$CF_ENV_FILE" ]; then
-        log_error "No saved tunnel credentials found. Configure the tunnel first (Option 1)."
+    if ! command -v cloudflared &>/dev/null; then
+        log_error "cloudflared is not installed. Please complete Cloudflare Tunnel setup first."
         return 1
     fi
 
-    log_step "Reconnecting Cloudflare Tunnel..."
-    $SUDO systemctl daemon-reload
-    $SUDO systemctl enable "$CF_SERVICE" 2>/dev/null || true
-    $SUDO systemctl restart "$CF_SERVICE"
-    sleep 2
-
-    if $SUDO systemctl is-active --quiet "$CF_SERVICE"; then
-        log_success "Tunnel reconnected and active."
-    else
-        log_error "Failed to reconnect. Check: sudo journalctl -u cloudflared -n 30"
-    fi
-}
-
-# 2.6 Disconnect Tunnel
-cf_disconnect_tunnel() {
-    print_banner
-    echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Disconnect${NC}\n"
-    log_divider
-    check_privileges
-
-    log_warning "This will stop and disable the Cloudflare Tunnel service."
-    log_warning "Public access to zPanel via your Cloudflare hostname will be disconnected."
-    echo -e "  ${DIM}Your Cloudflare account tunnel and DNS records will NOT be deleted.${NC}"
+    echo -e "    ${BOLD}[1]${NC} Restart existing service and reconnect"
+    echo -e "    ${BOLD}[2]${NC} Update tunnel token and reconnect"
+    echo -e "    ${BOLD}[3]${NC} Cancel"
     echo ""
-    echo -e "  ${YELLOW}Confirm disconnection? [y/N]:${NC} \c"
-    read -r CONFIRM_DISC
+    log_divider
+    echo -ne "  Choose an option [1-3]: "
+    read -r RECONN_CHOICE
 
-    if [[ ! "$CONFIRM_DISC" =~ ^[Yy]$ ]]; then
-        log_info "Disconnection cancelled."
-        return 0
-    fi
-
-    $SUDO systemctl stop "$CF_SERVICE" 2>/dev/null || true
-    $SUDO systemctl disable "$CF_SERVICE" 2>/dev/null || true
-    log_success "Cloudflare Tunnel service stopped and disabled from boot."
-    log_info "Configuration preserved in $CF_CONFIG_DIR. You can reconnect anytime."
+    case "$RECONN_CHOICE" in
+        1)
+            log_step "Restarting cloudflared service..."
+            $SUDO systemctl daemon-reload 2>/dev/null || true
+            $SUDO systemctl enable cloudflared 2>/dev/null || true
+            $SUDO systemctl restart cloudflared 2>/dev/null || true
+            sleep 3
+            if systemctl is-active --quiet cloudflared 2>/dev/null; then
+                log_success "Cloudflare Tunnel service is running."
+            else
+                log_error "Cloudflare Tunnel service failed to start. Check: sudo journalctl -u cloudflared -n 30"
+            fi
+            ;;
+        2)
+            setup_cloudflare_tunnel
+            ;;
+        *)
+            log_info "Operation cancelled."
+            return 0
+            ;;
+    esac
 }
 
-# Submenu loop
-cloudflare_menu() {
+# Step 4: Return to the Main Menu
+show_cloudflare_menu() {
     while true; do
         print_banner
-        echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL MANAGEMENT${NC}\n"
+        echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL${NC}\n"
         log_divider
         echo ""
-        echo -e "    ${BOLD}[1]${NC} Configure / Connect Tunnel"
-        echo -e "    ${BOLD}[2]${NC} Check Tunnel Status"
-        echo -e "    ${BOLD}[3]${NC} Restart Tunnel"
-        echo -e "    ${BOLD}[4]${NC} Stop Tunnel"
-        echo -e "    ${BOLD}[5]${NC} Reconnect Tunnel"
-        echo -e "    ${BOLD}[6]${NC} Disconnect Tunnel"
-        echo -e "    ${BOLD}[7]${NC} Back to Main Menu"
+        printf "    %-16s : %s\n" "Installation" "${GREEN}Completed${NC}"
+        printf "    %-16s : %s\n" "Service" "${GREEN}Running${NC}"
+        printf "    %-16s : %s\n" "Auto Startup" "${GREEN}Enabled${NC}"
         echo ""
         log_divider
-        echo -e "  \c"
-        read -p "Select an option [1-7]: " CF_SUB_CHOICE
+        echo ""
+        echo -e "    ${BOLD}[1]${NC} Back to Main Menu"
+        echo -e "    ${BOLD}[2]${NC} Check Status"
+        echo -e "    ${BOLD}[3]${NC} Reconnect Tunnel"
+        echo ""
+        log_divider
+        echo -ne "  Choose an option: "
+        read -r CF_OPTION
 
-        case "$CF_SUB_CHOICE" in
-            1) cf_configure_tunnel;  read -p "  Press Enter to continue..." ;;
-            2) cf_check_status;       read -p "  Press Enter to continue..." ;;
-            3) cf_restart_tunnel;     read -p "  Press Enter to continue..." ;;
-            4) cf_stop_tunnel;        read -p "  Press Enter to continue..." ;;
-            5) cf_reconnect_tunnel;   read -p "  Press Enter to continue..." ;;
-            6) cf_disconnect_tunnel;  read -p "  Press Enter to continue..." ;;
-            7) return 0 ;;
-            *) log_error "Invalid selection. Please choose an option from 1 to 7."; sleep 1 ;;
+        case "$CF_OPTION" in
+            1)
+                return 0
+                ;;
+            2)
+                cf_check_status
+                echo ""
+                read -p "  Press Enter to continue..."
+                ;;
+            3)
+                cf_reconnect_tunnel
+                echo ""
+                read -p "  Press Enter to continue..."
+                ;;
+            *)
+                log_error "Invalid selection. Please choose an option from 1 to 3."
+                sleep 1
+                ;;
         esac
     done
+}
+
+# Main Cloudflare Option Handler (Option 2)
+cloudflare_tunnel_option() {
+    check_privileges
+
+    # If already installed and service is currently running, offer menu or token update
+    if command -v cloudflared &>/dev/null && systemctl is-active --quiet cloudflared 2>/dev/null; then
+        print_banner
+        echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL${NC}\n"
+        log_divider
+        echo ""
+        log_info "Cloudflare Tunnel service is already installed and running."
+        echo ""
+        echo -e "    ${BOLD}[1]${NC} Open Cloudflare Tunnel Menu (Status / Reconnect)"
+        echo -e "    ${BOLD}[2]${NC} Update Tunnel Token & Reconnect"
+        echo -e "    ${BOLD}[3]${NC} Back to Main Menu"
+        echo ""
+        log_divider
+        echo -ne "  Choose an option [1-3]: "
+        read -r CF_EX_CHOICE
+        case "$CF_EX_CHOICE" in
+            1)
+                show_cloudflare_menu
+                return 0
+                ;;
+            2)
+                # Proceed to token setup
+                ;;
+            *)
+                return 0
+                ;;
+        esac
+    fi
+
+    # Step 1: Install cloudflared
+    if ! install_cloudflared; then
+        echo ""
+        read -p "  Press Enter to return to main menu..."
+        return 1
+    fi
+
+    # Step 2 & Step 3: Ask for token and connect automatically
+    if ! setup_cloudflare_tunnel; then
+        echo ""
+        read -p "  Press Enter to return to main menu..."
+        return 1
+    fi
+
+    # Step 4: Show menu
+    show_cloudflare_menu
 }
 
 # ─────────────────────────────────────────────
@@ -1044,10 +1006,10 @@ restart_zpanel() {
 # ─────────────────────────────────────────────
 while true; do
     print_banner
-    echo -e "  ${BOLD}INSTALLATION & MANAGEMENT${NC}"
+    echo -e "  ${BOLD}zPanel MANAGEMENT & INSTALLER${NC}"
     echo ""
-    echo -e "    ${BOLD}[1]${NC} Install zPanel (Node.js + PM2) ${GREEN}[Recommended]${NC}"
-    echo -e "    ${BOLD}[2]${NC} Cloudflare Tunnel Management"
+    echo -e "    ${BOLD}[1]${NC} Install zPanel (Node.js + PM2)"
+    echo -e "    ${BOLD}[2]${NC} Cloudflare Tunnel"
     echo -e "    ${BOLD}[3]${NC} Update zPanel"
     echo -e "    ${BOLD}[4]${NC} Create Admin User"
     echo -e "    ${BOLD}[5]${NC} Restart zPanel"
@@ -1055,7 +1017,7 @@ while true; do
     echo ""
     log_divider
     echo -e "  \c"
-    read -p "Select an option [1-6]: " MAIN_CHOICE
+    read -p "Choose an option [1-6]: " MAIN_CHOICE
 
     case "$MAIN_CHOICE" in
         1)
@@ -1064,7 +1026,7 @@ while true; do
             read -p "  Press Enter to return to main menu..."
             ;;
         2)
-            cloudflare_menu
+            cloudflare_tunnel_option
             ;;
         3)
             update_zpanel
