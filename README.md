@@ -1,13 +1,13 @@
 # zPanel
 
-Made by Jishnu
+Made by Talha
 
 ## One-Line Install (Recommended)
 
 Run directly from GitHub — no manual download needed:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/JishnuTheGamer/Jtg/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/TalhaPlaysOG/zPanel/main/install.sh)
 ```
 
 This interactive script lets you:
@@ -37,8 +37,8 @@ This interactive script lets you:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/JishnuTheGamer/Jtg.git
-   cd Jtg
+   git clone https://github.com/TalhaPlaysOG/zPanel.git
+   cd zPanel
    ```
 
 2. Install dependencies:
