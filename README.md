@@ -2,20 +2,34 @@
 
 Made by Jishnu
 
-## Quick Automated Setup (Recommended)
+## One-Line Install (Recommended)
 
-Run the automated management script:
+Run directly from GitHub — no manual download needed:
 
 ```bash
-bash install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/JishnuTheGamer/Jtg/main/install.sh)
 ```
 
-Menu Options:
-1. **Install Panel** (Installs Node.js, Docker, PM2, dependencies, builds & starts on port 6767)
-2. **Update Panel**
-3. **Create Admin User**
-4. **Restart Panel**
-5. **Exit**
+This interactive script lets you:
+1. **Install Panel** — Node.js only (Port 6767)
+2. **Install Panel** — Node.js + Docker Support (Port 6767)
+3. **Install Panel** — Development Mode (Port 3000)
+4. **Update Panel**
+5. **Create Admin User**
+6. **Restart Panel**
+7. **Exit**
+
+---
+
+## Features
+
+- 🎮 **Minecraft Server Management** — Start, stop, console, file manager, plugins, mods, worlds, backups
+- ☁️ **Cloudflare Tunnel** — Expose servers via Quick Tunnels (`*.trycloudflare.com`) or Zero Trust tokens
+- 🌐 **Playit.gg Tunnel** — Alternative tunneling via playit.gg
+- 📁 **Multi-File Upload** — Upload multiple files at once via button or drag-and-drop
+- 🐳 **Docker & Local Process** — Run servers in Docker containers or as local processes
+- 👥 **Sub-Users** — Per-server access control
+- 🔑 **Google Login** — Optional Firebase authentication
 
 ---
 
