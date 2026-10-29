@@ -1,0 +1,2802 @@
+=== JTG Panel Local Runtime Update Logs & Code ===
+
+==================================================
+File: server.ts
+==================================================
+import "dotenv/config";
+import express from "express";
+import path from "path";
+import cors from "cors";
+import { createServer } from "http";
+import { Server as SocketIOServer } from "socket.io";
+import { createServer as createViteServer } from "vite";
+import fs from "fs-extra";
+import jwt from "jsonwebtoken";
+
+const app = express();
+const httpServer = createServer(app);
+export const io = new SocketIOServer(httpServer, {
+  cors: { origin: "*" },
+});
+app.set("io", io);
+
+// Initialize data folders
+const DATA_DIR = path.join(process.cwd(), ".data");
+const SERVERS_DIR = path.join(DATA_DIR, "servers");
+const BACKUPS_DIR = path.join(process.cwd(), "backups");
+
+fs.ensureDirSync(DATA_DIR);
+fs.ensureDirSync(SERVERS_DIR);
+fs.ensureDirSync(BACKUPS_DIR);
+fs.ensureDirSync(path.join(DATA_DIR, "temp"));
+
+if (!fs.existsSync(path.join(DATA_DIR, "users.json"))) fs.writeFileSync(path.join(DATA_DIR, "users.json"), "[]");
+if (!fs.existsSync(path.join(DATA_DIR, "servers.json"))) fs.writeFileSync(path.join(DATA_DIR, "servers.json"), "[]");
+if (!fs.existsSync(path.join(DATA_DIR, "settings.json"))) fs.writeFileSync(path.join(DATA_DIR, "settings.json"), "{}");
+
+import { attachServerRuntimeSocket, getServerRuntimeLogs } from "./src/server/services/runtime.js";
+import { panelEvents } from "./src/server/events.js";
+
+panelEvents.on("log", (serverId, data) => {
+  io.to(`server_${serverId}`).emit("log", data);
+});
+
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) return next(new Error("Authentication error"));
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET || "jtg-panel-super-secret");
+    (socket as any).user = verified;
+    next();
+  } catch (err) {
+    next(new Error("Authentication error"));
+  }
+});
+
+io.on("connection", (socket) => {
+  socket.on("joinServer", async (serverId) => {
+    socket.join(`server_${serverId}`);
+    
+    // Ensure logs are streamed if container is already running
+    try {
+      const serversJSON = await fs.readFile(path.join(DATA_DIR, "servers.json"), "utf8");
+      const servers = JSON.parse(serversJSON);
+      const server = Array.isArray(servers) ? servers.find((s: any) => s.id === serverId) : null;
+      if (server && server.containerId) {
+        const logs = await getServerRuntimeLogs(server);
+        if (logs) {
+           socket.emit("log", logs.trim() + "\n");
+        }
+        await attachServerRuntimeSocket(server, serverId);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  });
+  socket.on("leaveServer", (serverId) => {
+    socket.leave(`server_${serverId}`);
+  });
+});
+
+const PORT = process.env.PORT || 6767;
+
+app.use(express.json({ limit: "50gb" }));
+app.use(express.urlencoded({ extended: true, limit: "50gb" }));
+app.use(cors());
+
+import apiRoutes from "./src/server/routes/api.js";
+app.use("/api", apiRoutes);
+
+import { initSFTPServer } from "./src/server/services/sftp.js";
+
+async function startServer() {
+  await initSFTPServer();
+
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`JTG Panel running on port ${PORT}`);
+  });
+}
+
+
+
+
+// Only start server if not imported as a module in tests
+const isMain = 
+  (typeof require !== 'undefined' && require.main === module) || 
+  (process.argv[1] && process.argv[1].includes('server.ts')) ||
+  (process.argv[1] && process.argv[1].includes('server.cjs'));
+
+if (isMain && process.env.TEST_ENV !== "true") {
+  startServer();
+}
+
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  fs.writeFileSync('crash.log', String(err.stack));
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  fs.writeFileSync('crash.log', String(reason));
+});
+
+
+==================================================
+File: install.sh
+==================================================
+#!/bin/bash
+
+# =========================================================
+# JTG Panel - Automated Installation & Management Script
+# Repository: https://github.com/JishnuTheGamer/Jtg
+# =========================================================
+
+set -e
+
+# Colors for UI
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+print_banner() {
+    clear
+    echo -e "${CYAN}${BOLD}"
+    echo "  ========================================================"
+    echo "   _____ _____ _____   _____                  _           "
+    echo "  |_   _|_   _/ ____| |  __ \                | |          "
+    echo "    | |   | | | |  __ | |__) |__ _ n  ___| |          "
+    echo "    | |   | | | | |_ ||  ___/ _ \ ' \/ _ \ |          "
+    echo "   _| |_  | | | |__| || |  |  __/ | | |  __/ |          "
+    echo "  |_____| |_|  \____||_|   \___|_| |_|\___|_|          "
+    echo "                                                          "
+    echo "            JTG PANEL MANAGEMENT & INSTALLER              "
+    echo "            Main Panel Default Port: 6767                 "
+    echo "  ========================================================"
+    echo -e "${NC}"
+}
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        log_warning "This script is recommended to be run as root or with sudo."
+    fi
+}
+
+install_panel() {
+    local INSTALL_MODE=$1
+    print_banner
+    
+    if [ "$INSTALL_MODE" = "node" ]; then
+        echo -e "${BOLD}--- [1] Install Panel (Node.js Only) ---${NC}\n"
+    elif [ "$INSTALL_MODE" = "docker" ]; then
+        echo -e "${BOLD}--- [2] Install Panel (Node.js + Docker) ---${NC}\n"
+    elif [ "$INSTALL_MODE" = "dev" ]; then
+        echo -e "${BOLD}--- [3] Install Panel (Dev Mode) ---${NC}\n"
+    fi
+
+    check_root
+    log_info "Checking system environment and repairing package manager if needed..."
+
+    # Auto-repair broken dpkg / apt state if apt exists
+    if command -v apt-get &> /dev/null; then
+        sudo dpkg --configure -a 2>/dev/null || true
+        sudo apt-get install -f -y 2>/dev/null || true
+        sudo apt-get update -y || true
+        sudo apt-get install -y curl git build-essential ca-certificates tar xz-utils || log_warning "Some system packages failed to install, continuing..."
+
+        # Optional Java Installation
+        echo -e "\n${CYAN}Would you like to install Java (openjdk-21-jre-headless) for local Minecraft servers? (y/n)${NC}"
+        read -r INSTALL_JAVA
+        if [[ "$INSTALL_JAVA" =~ ^[Yy]$ ]]; then
+            log_info "Installing Java..."
+            sudo apt-get install -y openjdk-21-jre-headless || log_warning "Failed to install Java, continuing..."
+        else
+            log_info "Skipping Java installation."
+        fi
+    elif command -v yum &> /dev/null; then
+        sudo yum update -y || true
+        sudo yum install -y curl git make gcc-c++ ca-certificates tar xz || log_warning "Some system packages failed to install, continuing..."
+    fi
+
+    # Ensure Node.js is installed and version is >= 22 (or >= 20.19)
+    NEED_NODE_UPGRADE=0
+    if ! command -v node &> /dev/null; then
+        NEED_NODE_UPGRADE=1
+    else
+        NODE_MAJOR=$(node -v | cut -d'.' -f1 | tr -d 'v')
+        NODE_MINOR=$(node -v | cut -d'.' -f2)
+        if [ "$NODE_MAJOR" -lt 22 ]; then
+            if [ "$NODE_MAJOR" -lt 20 ] || [ "$NODE_MINOR" -lt 19 ]; then
+                NEED_NODE_UPGRADE=1
+            fi
+        fi
+    fi
+
+    if [ "$NEED_NODE_UPGRADE" -eq 1 ]; then
+        log_info "Installing / Upgrading to Node.js 22.x..."
+        
+        # Try Nodesource first
+        if command -v apt-get &> /dev/null; then
+            curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - 2>/dev/null || true
+            sudo apt-get install -y nodejs 2>/dev/null || true
+        fi
+
+        # Check if node upgraded properly
+        CURRENT_NODE_MAJOR=0
+        if command -v node &> /dev/null; then
+            CURRENT_NODE_MAJOR=$(node -v | cut -d'.' -f1 | tr -d 'v')
+        fi
+
+        # Fallback to direct Node.js v22 binary installation if apt/nodesource failed
+        if [ "$CURRENT_NODE_MAJOR" -lt 22 ]; then
+            log_info "Installing Node.js 22.13.1 directly from binary tarball..."
+            ARCH=$(uname -m)
+            case "$ARCH" in
+                x86_64) NODE_ARCH="x64" ;;
+                aarch64) NODE_ARCH="arm64" ;;
+                armv7l) NODE_ARCH="armv7l" ;;
+                *) NODE_ARCH="x64" ;;
+            esac
+            
+            NODE_DIST="node-v22.13.1-linux-${NODE_ARCH}"
+            curl -fsSL "https://nodejs.org/dist/v22.13.1/${NODE_DIST}.tar.xz" -o /tmp/node22.tar.xz || true
+            if [ -f "/tmp/node22.tar.xz" ]; then
+                sudo tar -xJf /tmp/node22.tar.xz -C /usr/local --strip-components=1 2>/dev/null || tar -xJf /tmp/node22.tar.xz -C /usr/local --strip-components=1 2>/dev/null || true
+                rm -f /tmp/node22.tar.xz
+            fi
+        fi
+    fi
+
+    if command -v node &> /dev/null; then
+        log_success "Node.js $(node -v) is ready."
+    else
+        log_error "Node.js installation could not be completed automatically."
+    fi
+    
+    # Install PM2 globally
+    if ! command -v pm2 &> /dev/null; then
+        log_info "Installing PM2 locally and globally..."
+        sudo npm install -g pm2 || true
+        npm install pm2 -D
+    else
+        log_success "PM2 is already installed."
+    fi
+
+    # Docker Setup
+    if [ "$INSTALL_MODE" = "docker" ]; then
+        log_info "Installing Docker..."
+        if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com | sh || true
+            if command -v systemctl &> /dev/null; then
+                sudo systemctl enable --now docker || true
+            fi
+        else
+            log_success "Docker is already installed."
+        fi
+    fi
+
+    log_info "Downloading and setting up the JTG Panel..."
+    
+    # Check if we are already in the Jtg directory
+    if [ -f "package.json" ] && grep -q "react-example" "package.json" 2>/dev/null; then
+        log_info "Running setup in current directory..."
+        WORK_DIR="."
+    elif [ -d "Jtg" ]; then
+        log_info "The 'Jtg' folder already exists. Running setup inside it..."
+        WORK_DIR="Jtg"
+    else
+        log_info "Cloning from GitHub..."
+        git clone https://github.com/JishnuTheGamer/Jtg
+        WORK_DIR="Jtg"
+    fi
+    
+    # Navigate into the directory
+    cd "$WORK_DIR" || { log_error "Failed to enter the directory!"; return; }
+    
+    # Ensure .env exists
+    log_info "Setting up .env file..."
+    if [ "$INSTALL_MODE" = "dev" ]; then
+        echo "PORT=3000" > .env
+        echo "ENABLE_DOCKER=false" >> .env
+        echo "VITE_ENABLE_DEV_MODE=true" >> .env
+    elif [ "$INSTALL_MODE" = "docker" ]; then
+        echo "PORT=6767" > .env
+        echo "ENABLE_DOCKER=true" >> .env
+    else
+        echo "PORT=6767" > .env
+        echo "ENABLE_DOCKER=false" >> .env
+    fi
+    echo "JWT_SECRET=$(head -c 32 /dev/urandom | base64)" >> .env
+    
+    # Ensure ecosystem.config.cjs exists for PM2
+    if [ "$INSTALL_MODE" = "dev" ]; then
+        log_info "Creating PM2 ecosystem file for dev mode..."
+cat << 'EOF2' > ecosystem.config.cjs
+module.exports = {
+  apps: [
+    {
+      name: "jtg-panel-dev",
+      script: "npm",
+      args: "run dev",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "development",
+        PORT: 3000,
+        ENABLE_DOCKER: "false"
+      }
+    }
+  ]
+};
+EOF2
+    else
+        log_info "Creating PM2 ecosystem file for production mode..."
+cat << 'EOF2' > ecosystem.config.cjs
+module.exports = {
+  apps: [
+    {
+      name: "jtg-panel",
+      script: "npm",
+      args: "start",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "production",
+        PORT: 6767,
+        ENABLE_DOCKER: process.env.ENABLE_DOCKER || "false"
+      }
+    }
+  ]
+};
+EOF2
+    fi
+
+    log_info "Installing Node.js dependencies..."
+    npm i 
+    
+    if [ "$INSTALL_MODE" != "dev" ]; then
+        log_info "Building panel..."
+        npm run build
+    fi
+    
+    log_info "Creating admin user..."
+    npm run createuser
+    
+    log_info "Starting panel with PM2..."
+    npx pm2 start ecosystem.config.cjs
+    npx pm2 save || true
+    
+    log_success "=========================================="
+    log_success " Panel successfully installed and started!"
+    if [ "$INSTALL_MODE" = "dev" ]; then
+        log_success " Access URL: http://<YOUR-SERVER-IP>:3000"
+    else
+        log_success " Access URL: http://<YOUR-SERVER-IP>:6767"
+    fi
+    log_success "=========================================="
+    
+    # Return to the main directory
+    if [ "$WORK_DIR" = "Jtg" ]; then
+        cd ..
+    fi
+}
+
+update_panel() {
+    print_banner
+    echo -e "${BOLD}--- [4] Update JTG Panel ---${NC}\n"
+    
+    if [ -f "package.json" ] && grep -q "react-example" "package.json" 2>/dev/null; then
+        WORK_DIR="."
+    elif [ -d "Jtg" ]; then
+        WORK_DIR="Jtg"
+    else
+        log_error "'Jtg' directory not found! Please install the panel first."
+        return
+    fi
+    
+    cd "$WORK_DIR" || { log_error "Failed to enter the directory!"; return; }
+        
+    log_info "Fetching updates from GitHub..."
+    git stash || true
+    git pull
+    
+    log_info "Installing updated dependencies..."
+    npm i 
+    
+    log_info "Rebuilding panel..."
+    npm run build 
+    
+    log_info "Restarting PM2 process..."
+    npx pm2 restart jtg-panel || npx pm2 restart all
+    
+    log_success "Panel successfully updated and restarted!"
+    
+    if [ "$WORK_DIR" = "Jtg" ]; then
+        cd ..
+    fi
+}
+
+create_admin_user() {
+    print_banner
+    echo -e "${BOLD}--- [5] Create Admin User ---${NC}\n"
+    
+    if [ -f "package.json" ] && grep -q "react-example" "package.json" 2>/dev/null; then
+        WORK_DIR="."
+    elif [ -d "Jtg" ]; then
+        WORK_DIR="Jtg"
+    else
+        log_error "'Jtg' directory not found!"
+        return
+    fi
+    
+    cd "$WORK_DIR" || { log_error "Failed to enter the directory!"; return; }
+    
+    log_info "Running admin creation script..."
+    npm run createuser
+    
+    if [ "$WORK_DIR" = "Jtg" ]; then
+        cd ..
+    fi
+    log_success "Admin user created!"
+}
+
+restart_panel() {
+    print_banner
+    echo -e "${BOLD}--- [6] Restart JTG Panel ---${NC}\n"
+    
+    log_info "Restarting panel..."
+    if command -v pm2 &> /dev/null || npx pm2 -v &> /dev/null; then
+        npx pm2 restart jtg-panel || npx pm2 restart all
+        log_success "Panel restarted successfully!"
+    else
+        log_error "PM2 is not installed. Panel cannot be restarted via PM2."
+    fi
+}
+
+# Main menu loop
+while true; do
+    print_banner
+    echo -e "  ${BOLD}1)${NC} Install Panel (Node.js Only - Port 6767)"
+    echo -e "  ${BOLD}2)${NC} Install Panel (Node.js + Docker Support - Port 6767)"
+    echo -e "  ${BOLD}3)${NC} Install Panel (Development Mode - Port 3000)"
+    echo -e "  ${BOLD}4)${NC} Update Panel"
+    echo -e "  ${BOLD}5)${NC} Create Admin User"
+    echo -e "  ${BOLD}6)${NC} Restart Panel"
+    echo -e "  ${BOLD}7)${NC} Exit"
+    echo -e "\n========================================================"
+    read -p " Choose an option (1-7): " CHOICE
+
+    case "$CHOICE" in
+        1)
+            install_panel "node"
+            read -p "Press Enter to return to main menu..."
+            ;;
+        2)
+            install_panel "docker"
+            read -p "Press Enter to return to main menu..."
+            ;;
+        3)
+            install_panel "dev"
+            read -p "Press Enter to return to main menu..."
+            ;;
+        4)
+            update_panel
+            read -p "Press Enter to return to main menu..."
+            ;;
+        5)
+            create_admin_user
+            read -p "Press Enter to return to main menu..."
+            ;;
+        6)
+            restart_panel
+            read -p "Press Enter to return to main menu..."
+            ;;
+        7)
+            echo -e "\n${YELLOW}Exiting script... Goodbye!${NC}\n"
+            exit 0
+            ;;
+        *)
+            log_error "Invalid option! Please enter 1-7."
+            sleep 1.5
+            ;;
+    esac
+done
+
+
+==================================================
+File: src/server/services/local.ts
+==================================================
+import fs from "fs-extra";
+import path from "path";
+import { spawn, ChildProcess } from "child_process";
+import { promisify } from "util";
+import { exec } from "child_process";
+import { downloadJar } from "./jarDownloader.js";
+import { panelEvents } from "../events.js";
+
+const execAsync = promisify(exec);
+const processes = new Map<string, ChildProcess>();
+
+export const createLocalServer = async (serverData: any) => {
+  const serverPath = path.join(process.cwd(), ".data", "servers", serverData.id);
+  await fs.ensureDir(serverPath);
+
+  const type = (serverData.type || "paper").toLowerCase();
+  
+  if (type === "velocity") {
+    const configPath = path.join(serverPath, "velocity.toml");
+    if (!await fs.pathExists(configPath)) {
+      await fs.writeFile(configPath, `bind = "0.0.0.0:${serverData.port || 25577}"\nmotd = "&#09add3A Velocity Server"\n`);
+    }
+  } else if (type === "bungeecord" || type === "waterfall") {
+    const configPath = path.join(serverPath, "config.yml");
+    if (!await fs.pathExists(configPath)) {
+      await fs.writeFile(configPath, `listeners:\n- query_port: ${serverData.port || 25577}\n  host: 0.0.0.0:${serverData.port || 25577}\n  max_players: 1000\n`);
+    }
+  } else {
+    // Standard Minecraft server
+    const eulaPath = path.join(serverPath, "eula.txt");
+    await fs.writeFile(eulaPath, "eula=true\n");
+
+    const propsPath = path.join(serverPath, "server.properties");
+    if (!await fs.pathExists(propsPath)) {
+      await fs.writeFile(propsPath, `server-port=${serverData.port || 25565}\n`);
+    }
+  }
+
+  const jarPath = path.join(serverPath, "server.jar");
+  if (!await fs.pathExists(jarPath)) {
+    try {
+      await downloadJar(type, serverData.version || "latest", jarPath);
+    } catch (e) {
+      console.error("Failed to download JAR:", e);
+      await fs.writeFile(jarPath, "DUMMY JAR");
+    }
+  }
+
+  return `local-${serverData.id}`;
+};
+
+
+export const startLocalServer = async (id: string, serverData: any) => {
+  const serverPath = path.join(process.cwd(), ".data", "servers", id);
+  const jarPath = path.join(serverPath, "server.jar");
+
+  if (!await fs.pathExists(jarPath)) {
+    throw new Error("server.jar not found");
+  }
+
+  const memory = serverData.ram || 1;
+  const child = spawn("java", [`-Xms${memory}G`, `-Xmx${memory}G`, "-jar", "server.jar", "nogui"], {
+    cwd: serverPath,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  const logPath = path.join(serverPath, "panel.log");
+  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+
+  processes.set(id, child);
+
+  const emitLog = (msg: string) => {
+    panelEvents.emit("log", id, msg);
+  };
+
+  const logMessage = (msg: string) => {
+    const formatted = `[Panel] ${msg}\n`;
+    if (logStream.writable) {
+      logStream.write(formatted);
+    }
+    emitLog(formatted);
+  };
+
+  child.on("spawn", () => {
+    logMessage(`Server process started with PID ${child.pid}`);
+  });
+
+  child.on("error", (err) => {
+    logMessage(`Failed to start server process: ${err.message}`);
+    if (err.message.includes("ENOENT")) {
+        logMessage("Java is not installed or not in PATH! Please install Java.");
+    }
+  });
+
+  child.on("close", (code) => {
+    logMessage(`Server process exited with code ${code}`);
+    processes.delete(id);
+    activeStreams.delete(id);
+  });
+
+  child.stdout?.on("data", (data: Buffer) => {
+    const text = data.toString();
+    if (logStream.writable) logStream.write(text);
+    emitLog(text);
+  });
+
+  child.stderr?.on("data", (data: Buffer) => {
+    const text = data.toString();
+    if (logStream.writable) logStream.write(text);
+    emitLog(text);
+  });
+};
+
+export const stopLocalServer = async (id: string) => {
+  const child = processes.get(id);
+  if (child) {
+    if (child.stdin) {
+      child.stdin.write("stop\nend\n");
+    } else {
+      child.kill("SIGTERM");
+    }
+  }
+};
+
+export const restartLocalServer = async (id: string, serverData: any) => {
+  await stopLocalServer(id);
+  setTimeout(() => {
+    startLocalServer(id, serverData).catch(console.error);
+  }, 2000);
+};
+
+export const deleteLocalServer = async (id: string) => {
+  await stopLocalServer(id);
+  const serverPath = path.join(process.cwd(), ".data", "servers", id);
+  await fs.remove(serverPath);
+};
+
+export const getLocalServerStatus = async (id: string) => {
+  const isRunning = processes.has(id);
+  return {
+    State: {
+      Running: isRunning
+    }
+  };
+};
+
+export const getLocalServerStats = async (id: string) => {
+  const child = processes.get(id);
+  if (!child || !child.pid) return null;
+
+  try {
+    const { stdout } = await execAsync(`ps -p ${child.pid} -o %cpu,rss`);
+    const lines = stdout.trim().split("\n");
+    if (lines.length > 1) {
+      const parts = lines[1].trim().split(/\s+/);
+      const cpu = parseFloat(parts[0]);
+      const rss = parseInt(parts[1]) * 1024;
+      return {
+        cpu_stats: { cpu_usage: { total_usage: cpu }, system_cpu_usage: 100 },
+        precpu_stats: { cpu_usage: { total_usage: 0 }, system_cpu_usage: 100 },
+        memory_stats: { usage: rss, limit: 1024 * 1024 * 1024 * 4 }
+      };
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return {
+    cpu_stats: { cpu_usage: { total_usage: 0 }, system_cpu_usage: 100 },
+    precpu_stats: { cpu_usage: { total_usage: 0 }, system_cpu_usage: 100 },
+    memory_stats: { usage: 0, limit: 1024 * 1024 * 1024 }
+  };
+};
+
+export const getLocalServerLogs = async (id: string) => {
+  const logPath = path.join(process.cwd(), ".data", "servers", id, "panel.log");
+  if (await fs.pathExists(logPath)) {
+    const logs = await fs.readFile(logPath, "utf8");
+    return logs.split("\n").slice(-100).join("\n");
+  }
+  return "";
+};
+
+const activeStreams = new Set<string>();
+
+
+export const attachLocalServerSocket = (id: string, serverId: string) => {
+  // handled natively by startLocalServer now to capture all output reliably
+};
+
+export const sendLocalServerCommand = async (id: string, command: string) => {
+  const child = processes.get(id);
+  if (child && child.stdin) {
+    child.stdin.write(command + "\n");
+  }
+};
+
+export const getLocalProcessInfo = (id: string) => {
+  const child = processes.get(id);
+  const serverPath = path.join(process.cwd(), ".data", "servers", id);
+  if (child) {
+    return {
+      pid: child.pid,
+      jarPath: path.join(serverPath, "server.jar"),
+      logPath: path.join(serverPath, "panel.log")
+    };
+  }
+  return null;
+};
+
+
+==================================================
+File: src/server/services/runtime.ts
+==================================================
+import {
+  createServerContainer,
+  startContainer,
+  stopContainer,
+  restartContainer,
+  deleteContainer,
+  getContainerStatus,
+  getContainerStats,
+  getContainerLogs,
+  attachContainerSocket,
+  sendContainerCommand
+} from "./docker.js";
+
+import {
+  createLocalServer,
+  startLocalServer,
+  stopLocalServer,
+  restartLocalServer,
+  deleteLocalServer,
+  getLocalServerStatus,
+  getLocalServerStats,
+  getLocalServerLogs,
+  attachLocalServerSocket,
+  sendLocalServerCommand
+} from "./local.js";
+
+export const createServerRuntime = async (serverData: any, nodeId?: string) => {
+  if (serverData.runtimeType === "local") {
+    return await createLocalServer(serverData);
+  }
+  return await createServerContainer(serverData, nodeId);
+};
+
+export const startServerRuntime = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await startLocalServer(server.id, server);
+  }
+  return await startContainer(server.containerId, server.nodeId);
+};
+
+export const stopServerRuntime = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await stopLocalServer(server.id);
+  }
+  return await stopContainer(server.containerId, server.nodeId);
+};
+
+export const restartServerRuntime = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await restartLocalServer(server.id, server);
+  }
+  return await restartContainer(server.containerId, server.nodeId);
+};
+
+export const deleteServerRuntime = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await deleteLocalServer(server.id);
+  }
+  return await deleteContainer(server.containerId, server.nodeId);
+};
+
+export const getServerRuntimeStatus = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await getLocalServerStatus(server.id);
+  }
+  return await getContainerStatus(server.containerId, server.nodeId);
+};
+
+export const getServerRuntimeStats = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await getLocalServerStats(server.id);
+  }
+  return await getContainerStats(server.containerId, server.nodeId);
+};
+
+export const getServerRuntimeLogs = async (server: any) => {
+  if (server.runtimeType === "local") {
+    return await getLocalServerLogs(server.id);
+  }
+  return await getContainerLogs(server.containerId, server.nodeId);
+};
+
+export const attachServerRuntimeSocket = (server: any, serverId: string) => {
+  if (server.runtimeType === "local") {
+    return attachLocalServerSocket(server.id, serverId);
+  }
+  return attachContainerSocket(server.containerId, serverId, server.nodeId);
+};
+
+export const sendServerRuntimeCommand = async (server: any, command: string) => {
+  if (server.runtimeType === "local") {
+    return await sendLocalServerCommand(server.id, command);
+  }
+  return await sendContainerCommand(server.containerId, command, server.nodeId);
+};
+
+
+==================================================
+File: src/server/services/jarDownloader.ts
+==================================================
+import fs from "fs-extra";
+import axios from "axios";
+
+export const downloadJar = async (type: string, version: string, destPath: string) => {
+  type = type.toLowerCase();
+  let url = "";
+
+  if (type === "bungeecord" || type === "waterfall") {
+    url = "https://hub.spigotmc.org/jenkins/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar";
+  } else if (type === "velocity") {
+    url = "https://api.papermc.io/v2/projects/velocity/versions/3.4.0-SNAPSHOT/builds/448/downloads/velocity-3.4.0-SNAPSHOT-448.jar";
+  } else {
+    version = version === "latest" ? "1.21.1" : version;
+    url = `https://api.papermc.io/v2/projects/paper/versions/${version}/builds`;
+    // We will handle the actual download url in the try block
+  }
+
+  console.log(`Downloading ${type} ${version} from ${url}`);
+  
+  try {
+    if (!url.endsWith('.jar') && type !== "bungeecord" && type !== "waterfall" && type !== "velocity") {
+      // It's paper API
+      const buildsRes = await axios.get(url);
+      const builds = buildsRes.data.builds;
+      const latestBuild = builds[builds.length - 1];
+      const jarName = latestBuild.downloads.application.name;
+      url = `https://api.papermc.io/v2/projects/paper/versions/${version}/builds/${latestBuild.build}/downloads/${jarName}`;
+    }
+
+    const response = await axios({
+      method: 'GET',
+      url: url,
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const writer = fs.createWriteStream(destPath);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+  } catch (err) {
+    if (type === "velocity") {
+      console.warn("Velocity API blocked, downloading fallback BungeeCord proxy instead.");
+      const fbResponse = await axios({
+         method: 'GET',
+         url: "https://hub.spigotmc.org/jenkins/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar",
+         responseType: 'stream'
+      });
+      const writer = fs.createWriteStream(destPath);
+      fbResponse.data.pipe(writer);
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+    } else {
+      console.warn("Failed to download Paper, falling back to Purpur API.");
+      const fbVersion = version === "latest" ? "1.21.1" : version;
+      const fbUrl = `https://api.purpurmc.org/v2/purpur/${fbVersion}/latest/download`;
+      const fbResponse = await axios({
+         method: 'GET',
+         url: fbUrl,
+         responseType: 'stream'
+      });
+      const writer = fs.createWriteStream(destPath);
+      fbResponse.data.pipe(writer);
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+    }
+  }
+};
+
+
+==================================================
+File: src/server/controllers/servers.ts
+==================================================
+import { Request, Response } from "express";
+import { readJSON, writeJSON } from "../services/db.js";
+import {
+  createServerRuntime,
+  startServerRuntime,
+  stopServerRuntime,
+  restartServerRuntime,
+  deleteServerRuntime,
+  getServerRuntimeStatus,
+  getServerRuntimeStats,
+  sendServerRuntimeCommand,
+  attachServerRuntimeSocket
+} from "../services/runtime.js";
+import { getLocalProcessInfo } from "../services/local.js";
+import { createSftpUser, deleteSftpUser } from "../services/sftp.js";
+import crypto from "crypto";
+import fs from "fs-extra";
+import path from "path";
+import { ZipArchive } from "archiver";
+import extract from "extract-zip";
+
+export const getServers = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const servers = await readJSON("servers.json") || [];
+  
+  // Filter for normal users
+  const userServers = user.role === "admin" || user.role === "owner" ? servers : servers.filter((s: any) => s.owner === user.id);
+
+  // Update statuses
+  const updatedServers = await Promise.all(userServers.map(async (server: any) => {
+    if (server.containerId) {
+      const status = await getServerRuntimeStatus(server);
+      server.status = status?.State?.Running ? "online" : "offline";
+      if (server.runtimeType === 'local') {
+          const info = getLocalProcessInfo(server.id);
+          if (info) {
+              server.pid = info.pid;
+              server.jarPath = info.jarPath;
+              server.logPath = info.logPath;
+          }
+      }
+    }
+    return server;
+  }));
+
+  res.json(updatedServers);
+};
+
+export const getServer = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = (req as any).user;
+  const servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+  if (!server) {
+    res.status(404).json({ error: "Server not found" });
+    return;
+  }
+  if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const status = await getServerRuntimeStatus(server);
+  server.status = status?.State?.Running ? "online" : "offline";
+  if (server.runtimeType === 'local') {
+      
+      const info = getLocalProcessInfo(server.id);
+      if (info) {
+          server.pid = info.pid;
+          server.jarPath = info.jarPath;
+          server.logPath = info.logPath;
+      }
+  }
+  res.json(server);
+};
+
+export const getServerStats = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = (req as any).user;
+  const servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+  if (!server) {
+    res.status(404).json({ error: "Server not found" });
+    return;
+  }
+  if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  if (server.containerId) {
+    const stats = await getServerRuntimeStats(server);
+    res.json({
+      ...stats,
+      limitRam: server.ram ? server.ram * 1024 : 1024,
+      limitCpu: server.cpu || 100,
+      limitDisk: server.disk || 10
+    });
+  } else {
+    res.json({ cpu: 0, ram: 0, disk: 0, limitRam: server.ram ? server.ram * 1024 : 1024, limitCpu: server.cpu || 100, limitDisk: server.disk || 10 });
+  }
+};
+
+export const createServer = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (user.role !== "admin" && user.role !== "owner") {
+    return res.status(403).json({ error: "Only admins can create servers" });
+  }
+  const { name, ram, port, version, theme, cpu, disk, owner, ipAlias, type, nodeId, runtimeType } = req.body;
+  if (!name || !ram || !port) {
+    res.status(400).json({ error: "Missing required fields (name, ram, port)" });
+    return;
+  }
+
+  const id = crypto.randomUUID();
+  const serverData = {
+    id,
+    name,
+    owner: owner || user.id, // Support assigning owner at creation
+    ram,
+    cpu: cpu || 100,
+    disk: disk || 10,
+    port,
+    ipAlias: ipAlias || "",
+    runtimeType: runtimeType || "docker",
+    nodeId: nodeId || "local",
+    type: type || "PAPER",
+    version: version || "1.21.1",
+    theme: theme || "default",
+    status: "installing",
+    createdAt: new Date().toISOString(),
+    containerId: null as string | null,
+  };
+
+  const servers = await readJSON("servers.json") || [];
+  
+  if (servers.find((s: any) => s.port == port)) {
+    res.status(400).json({ error: "Port is already in use by another server." });
+    return;
+  }
+
+  servers.push(serverData);
+  await writeJSON("servers.json", servers);
+
+  try {
+    const containerId = await createServerRuntime(serverData);
+    serverData.containerId = containerId;
+    serverData.status = "offline";
+    await writeJSON("servers.json", Object.assign(servers, servers.map((s:any)=>s.id===id?serverData:s)));
+    await createSftpUser(id).catch(e => console.error("SFTP user creation failed:", e));
+    res.json(serverData);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const updateOwner = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (user.role !== "admin" && user.role !== "owner") {
+    return res.status(403).json({ error: "Only admins can update owner" });
+  }
+
+  const { id } = req.params;
+  const { owner } = req.body;
+
+  if (!owner) return res.status(400).json({ error: "Owner required" });
+
+  const servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  server.owner = owner;
+  await writeJSON("servers.json", servers);
+  
+  res.json({ success: true });
+};
+
+export const updateIpAlias = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const { id } = req.params;
+  const { ipAlias } = req.body;
+
+  const servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  server.ipAlias = ipAlias;
+  await writeJSON("servers.json", servers);
+  
+  res.json({ success: true });
+};
+
+export const deleteServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    
+    let servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    if (user.role !== "admin" && user.role !== "owner") {
+      return res.status(403).json({ error: "Only admins can delete servers" });
+    }
+
+    if (server.containerId) {
+      await deleteServerRuntime(server);
+    }
+    
+    servers = servers.filter((s: any) => s.id !== id);
+    await writeJSON("servers.json", servers);
+    
+    // Remove files
+    const serverDir = path.join(process.cwd(), ".data", "servers", id);
+    try {
+      await fs.remove(serverDir);
+    } catch (e) {
+      console.error("Failed to remove server directory", e);
+    }
+    
+    await deleteSftpUser(id).catch(e => console.error("SFTP user deletion failed:", e));
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const startServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const servers = await readJSON("servers.json") || [];
+    
+    const server = servers.find((s: any) => s.id === id);
+    if (!server || !server.containerId) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    if (server.suspended) {
+      return res.status(403).json({ error: "Server is suspended" });
+    }
+
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`server_${id}`).emit("clear_logs");
+      
+      await startServerRuntime(server);
+    } catch (startErr: any) {
+      if (startErr.statusCode === 404 || (startErr.message && startErr.message.toLowerCase().includes("no such container"))) {
+        console.log(`Container missing for server ${server.id}. Recreating...`);
+        server.containerId = await createServerRuntime(server);
+        await writeJSON("servers.json", servers);
+        await startServerRuntime(server);
+      } else {
+        throw startErr;
+      }
+    }
+    await attachServerRuntimeSocket(server, server.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Start server error:", err);
+    res.status(500).json({ error: err.message || "Failed to start server" });
+  }
+};
+
+export const stopServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    if (!server || !server.containerId) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    try {
+      await stopServerRuntime(server);
+    } catch (stopErr: any) {
+      if (stopErr.statusCode === 404 || (stopErr.message && stopErr.message.toLowerCase().includes("no such container"))) {
+        console.log(`Container already missing for server ${server.id}. Assuming stopped.`);
+      } else {
+        throw stopErr;
+      }
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Stop server error:", err);
+    res.status(500).json({ error: err.message || "Failed to stop server" });
+  }
+};
+
+export const restartServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    if (!server || !server.containerId) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`server_${id}`).emit("clear_logs");
+
+      await restartServerRuntime(server);
+    } catch (startErr: any) {
+      if (startErr.statusCode === 404 || (startErr.message && startErr.message.toLowerCase().includes("no such container"))) {
+        console.log(`Container missing for server ${server.id}. Recreating...`);
+        server.containerId = await createServerRuntime(server);
+        await writeJSON("servers.json", servers);
+        await startServerRuntime(server);
+      } else {
+        throw startErr;
+      }
+    }
+    await attachServerRuntimeSocket(server, server.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Restart server error:", err);
+    res.status(500).json({ error: err.message || "Failed to restart server" });
+  }
+};
+
+export const sendCommand = async (req: Request, res: Response) => {
+  
+  try {
+    const { id } = req.params;
+    const { command } = req.body;
+    const servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    if (!server || !server.containerId) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    await sendServerRuntimeCommand(server, command);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Command error:", err);
+    res.status(500).json({ error: err.message || "Failed to send command" });
+  }
+};
+
+export const changeServerVersion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { version, type } = req.body;
+    const user = (req as any).user;
+    
+    if (!version) return res.status(400).json({ error: "Version is required" });
+    
+    let servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+      return res.status(403).json({ error: "Only admins or owners can change version" });
+    }
+
+    if (server.containerId) {
+      const status = await getServerRuntimeStatus(server);
+      if (status?.State?.Running) {
+        return res.status(400).json({ error: "Server must be stopped before changing version. Please stop the server first." });
+      }
+      // Delete old container
+      await deleteServerRuntime(server);
+    }
+    
+    // Automatically delete config files to avoid issues when switching versions/types
+    const serverDir = path.join(process.cwd(), ".data", "servers", id);
+    const filesToDelete = [
+      "paper-global.yml", "paper-world-defaults.yml", "paper.yml",
+      "config/paper-global.yml", "config/paper-world-defaults.yml",
+      "world/data/random_sequences.dat"
+    ];
+    
+    for (const file of filesToDelete) {
+      const filePath = path.join(serverDir, file);
+      try {
+        if (await fs.pathExists(filePath)) {
+          await fs.remove(filePath);
+        }
+      } catch (e) {
+        console.error(`Failed to delete ${file}`, e);
+      }
+    }
+    
+    server.version = version;
+    if (type) {
+      server.type = type;
+    }
+    // Recreate container with new version env
+    const newContainerId = await createServerRuntime(server);
+    server.containerId = newContainerId;
+    
+    await writeJSON("servers.json", servers);
+    
+    res.json({ success: true, version, type: server.type });
+  } catch (err: any) {
+    console.error("Change version error", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// File manager basics
+export const getFiles = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const dirPath = req.query.path ? String(req.query.path) : "/";
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, dirPath);
+  
+  if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    const stats = await fs.stat(targetPath).catch(() => null);
+    if (!stats) {
+      // Return empty if not found
+      return res.json([]);
+    }
+    if (stats.isFile()) {
+       const content = await fs.readFile(targetPath, "utf-8");
+       return res.json({ isFile: true, content });
+    }
+    const files = await fs.readdir(targetPath, { withFileTypes: true });
+    res.json(files.map(f => ({
+      name: f.name,
+      isDirectory: f.isDirectory(),
+      size: f.isDirectory() ? 0 : fs.statSync(path.join(targetPath, f.name)).size
+    })));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+export const uploadChunk = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { uploadId, chunkIndex, fileName, path: dirPath } = req.body;
+  
+  if (!req.file || !uploadId || chunkIndex === undefined || !fileName) {
+    return res.status(400).json({ error: "Missing parameters" });
+  }
+
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, dirPath || "/");
+  const partFilePath = path.join(targetPath, fileName + '.part');
+
+  if (!partFilePath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    await fs.ensureDir(targetPath);
+    
+    // If it's the first chunk, ensure we start fresh
+    if (String(chunkIndex) === "0") {
+      if (fs.existsSync(partFilePath)) {
+        await fs.remove(partFilePath);
+      }
+    }
+
+    // Read the uploaded chunk and append it
+    const chunkData = await fs.readFile(req.file.path);
+    await fs.appendFile(partFilePath, chunkData);
+    
+    // Cleanup multer temp file
+    await fs.remove(req.file.path).catch(() => {});
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const completeUpload = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { uploadId, fileName, path: dirPath, totalChunks } = req.body;
+  if (!uploadId || !fileName || !totalChunks) {
+    return res.status(400).json({ error: "Missing parameters" });
+  }
+
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, dirPath || "/");
+  const finalFilePath = path.join(targetPath, fileName);
+  const partFilePath = path.join(targetPath, fileName + '.part');
+  
+  if (!finalFilePath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    if (fs.existsSync(partFilePath)) {
+      await fs.move(partFilePath, finalFilePath, { overwrite: true });
+    } else {
+      // In case totalChunks was 0 or something weird, but usually part file must exist.
+      throw new Error("Part file missing");
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const uploadFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const dirPath = req.body.path || "/";
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, dirPath);
+  
+  if (req.file) {
+    await fs.ensureDir(targetPath);
+    await fs.move(req.file.path, path.join(targetPath, req.file.originalname), { overwrite: true });
+  }
+  res.json({ success: true });
+};
+
+export const deleteFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const filePaths = req.body.paths || (req.body.path ? [req.body.path] : []);
+  
+  try {
+    for (const filePath of filePaths) {
+      const targetPath = path.join(process.cwd(), ".data", "servers", id, filePath);
+      
+      if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+        return res.status(403).json({ error: "Invalid path" });
+      }
+      
+      await fs.remove(targetPath);
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+export const zipFiles = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { dirPath, fileNames, outputName } = req.body;
+  
+  const baseDir = path.join(process.cwd(), ".data", "servers", id, dirPath);
+  const outZipPath = path.join(baseDir, outputName || "archive.zip");
+
+  if (!baseDir.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    const output = fs.createWriteStream(outZipPath);
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+
+    output.on("close", () => {
+      res.json({ success: true, filename: outputName || "archive.zip" });
+    });
+
+    archive.on("error", (err: any) => {
+      console.error("Archive error:", err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+
+    archive.pipe(output);
+
+    for (const name of fileNames) {
+      const filePath = path.join(baseDir, name);
+      const stat = await fs.stat(filePath);
+      if (stat.isDirectory()) {
+        archive.directory(filePath, name);
+      } else {
+        archive.file(filePath, { name });
+      }
+    }
+
+    await archive.finalize();
+  } catch (e: any) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+};
+
+export const renameFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { oldPath, newPath } = req.body;
+
+  const targetOldPath = path.join(process.cwd(), ".data", "servers", id, oldPath);
+  const targetNewPath = path.join(process.cwd(), ".data", "servers", id, newPath);
+
+  if (!targetOldPath.startsWith(path.join(process.cwd(), ".data", "servers", id)) ||
+      !targetNewPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    await fs.rename(targetOldPath, targetNewPath);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+export const downloadFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  let rawPaths: string[] = [];
+  if (req.query.paths) {
+    rawPaths = Array.isArray(req.query.paths) ? (req.query.paths as string[]) : String(req.query.paths).split(",");
+  } else if (req.query.path) {
+    rawPaths = [String(req.query.path)];
+  }
+
+  if (rawPaths.length === 0) {
+    return res.status(400).json({ error: "No path specified" });
+  }
+
+  const serverBaseDir = path.join(process.cwd(), ".data", "servers", id);
+
+  try {
+    if (rawPaths.length === 1) {
+      const singlePath = rawPaths[0];
+      const targetPath = path.join(serverBaseDir, singlePath);
+
+      if (!targetPath.startsWith(serverBaseDir)) {
+        return res.status(403).json({ error: "Invalid path" });
+      }
+
+      const stat = await fs.stat(targetPath);
+      if (!stat.isDirectory()) {
+        return res.download(targetPath, path.basename(targetPath));
+      }
+    }
+
+    // Multiple items OR a single directory -> stream as ZIP
+    const zipName = rawPaths.length === 1 
+      ? `${path.basename(rawPaths[0]) || "folder"}.zip`
+      : `download-${Date.now()}.zip`;
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
+
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+    archive.on("error", (err: any) => {
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+    archive.pipe(res);
+
+    for (const relPath of rawPaths) {
+      const targetPath = path.join(serverBaseDir, relPath);
+      if (!targetPath.startsWith(serverBaseDir)) continue;
+      const itemName = path.basename(targetPath);
+      const stat = await fs.stat(targetPath).catch(() => null);
+      if (!stat) continue;
+
+      if (stat.isDirectory()) {
+        archive.directory(targetPath, itemName);
+      } else {
+        archive.file(targetPath, { name: itemName });
+      }
+    }
+
+    await archive.finalize();
+  } catch (e: any) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+};
+
+export const unzipFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { path: filePath } = req.body;
+
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, filePath);
+  
+  if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    const destDir = path.dirname(targetPath);
+    await extract(targetPath, { dir: destDir });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+
+export const createFile = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { filePath } = req.body;
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, filePath);
+  if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+  try {
+    await fs.writeFile(targetPath, "", "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+export const createDirectory = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { filePath } = req.body;
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, filePath);
+  if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+  try {
+    await fs.mkdir(targetPath, { recursive: true });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+export const saveFileContent = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { filePath, content } = req.body;
+
+  const targetPath = path.join(process.cwd(), ".data", "servers", id, filePath);
+
+  if (!targetPath.startsWith(path.join(process.cwd(), ".data", "servers", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    await fs.writeFile(targetPath, content, "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+export const getBackups = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const backupsDir = path.join(process.cwd(), ".data", "backups", id);
+  await fs.ensureDir(backupsDir);
+
+  try {
+    const files = await fs.readdir(backupsDir);
+    const backups = [];
+    for (const file of files) {
+      if (file.endsWith(".zip")) {
+        const stats = await fs.stat(path.join(backupsDir, file));
+        backups.push({
+          filename: file,
+          size: stats.size,
+          createdAt: stats.birthtime,
+        });
+      }
+    }
+    backups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    res.json(backups);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+export const createBackup = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const serverDir = path.join(process.cwd(), ".data", "servers", id);
+  const backupsDir = path.join(process.cwd(), ".data", "backups", id);
+  await fs.ensureDir(backupsDir);
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `backup-${timestamp}.zip`;
+  const backupPath = path.join(backupsDir, filename);
+
+  try {
+    const serverExists = await fs.pathExists(serverDir);
+    if (!serverExists) {
+       await fs.ensureDir(serverDir); // ensure it acts properly if empty
+    }
+
+    const output = fs.createWriteStream(backupPath);
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+
+    output.on("close", () => {
+      if (!res.headersSent) res.json({ success: true, filename });
+    });
+
+    archive.on("error", (err: any) => {
+      console.error("Archive error:", err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+
+    archive.pipe(output);
+    archive.directory(serverDir, false);
+    await archive.finalize();
+  } catch (e: any) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+};
+
+export const downloadBackup = async (req: Request, res: Response) => {
+  const { id, filename } = req.params;
+  const backupPath = path.join(process.cwd(), ".data", "backups", id, filename);
+
+  // basic path traversal prevention
+  if (!backupPath.startsWith(path.join(process.cwd(), ".data", "backups", id))) {
+    return res.status(403).send("Invalid path");
+  }
+
+  if (await fs.pathExists(backupPath)) {
+    res.download(backupPath);
+  } else {
+    res.status(404).send("Backup not found");
+  }
+};
+
+export const deleteBackup = async (req: Request, res: Response) => {
+  const { id, filename } = req.params;
+  const backupPath = path.join(process.cwd(), ".data", "backups", id, filename);
+
+  if (!backupPath.startsWith(path.join(process.cwd(), ".data", "backups", id))) {
+    return res.status(403).json({ error: "Invalid path" });
+  }
+
+  try {
+    await fs.remove(backupPath);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+export const installPlugin = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { source, pluginId, pluginName } = req.body;
+  
+  // Allow direct downloadUrl fallback for backward compatibility
+  if (req.body.downloadUrl) {
+     try {
+        const serverDir = path.join(process.cwd(), ".data", "servers", id);
+        const pluginsDir = path.join(serverDir, "plugins");
+        await fs.ensureDir(pluginsDir);
+        const filePath = path.join(pluginsDir, req.body.filename);
+        if (req.body.downloadUrl === 'dummy') {
+          await fs.writeFile(filePath, '');
+        } else {
+          const axios = (await import("axios")).default;
+          const response = await axios({ url: req.body.downloadUrl, method: 'GET', responseType: 'stream' });
+          const writer = fs.createWriteStream(filePath);
+          response.data.pipe(writer);
+          await new Promise<void>((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); });
+        }
+        return res.json({ success: true, message: "Plugin installed successfully" });
+     } catch(e) {
+        return res.status(500).json({ error: "Failed to install plugin" });
+     }
+  }
+
+  if (!source || !pluginId || !pluginName) {
+    return res.status(400).json({ error: "Missing source, pluginId, or pluginName" });
+  }
+
+  try {
+    const serverDir = path.join(process.cwd(), ".data", "servers", id);
+    const pluginsDir = path.join(serverDir, "plugins");
+    await fs.ensureDir(pluginsDir);
+    
+    let downloadUrl = null;
+    let filename = `${pluginName.replace(/[^a-zA-Z0-9]/g, '_')}.jar`;
+    const axios = (await import("axios")).default;
+
+    const resolveGithubRelease = async (extUrl: string) => {
+      if (extUrl.includes('github.com') && extUrl.includes('/releases/')) {
+        let apiUrl = null;
+        const match = extUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/releases\/tag\/([^\/]+)/);
+        if (match) {
+          apiUrl = `https://api.github.com/repos/${match[1]}/${match[2]}/releases/tags/${match[3]}`;
+        } else {
+          const matchLatest = extUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/releases\/latest/);
+          if (matchLatest) {
+            apiUrl = `https://api.github.com/repos/${matchLatest[1]}/${matchLatest[2]}/releases/latest`;
+          }
+        }
+        if (apiUrl) {
+          try {
+            const ghRes = await axios.get(apiUrl);
+            if (ghRes.data && ghRes.data.assets) {
+              const jarAsset = ghRes.data.assets.find((a: any) => a.name.endsWith('.jar'));
+              if (jarAsset) {
+                return { url: jarAsset.browser_download_url, filename: jarAsset.name };
+              }
+            }
+          } catch(e) {
+            console.error('GitHub API error:', e);
+          }
+        }
+      }
+      return null;
+    };
+
+    if (source === 'modrinth') {
+      const verRes = await axios.get(`https://api.modrinth.com/v2/project/${pluginId}/version`);
+      if (verRes.data && verRes.data.length > 0) {
+        const file = verRes.data[0].files.find((f: any) => f.primary) || verRes.data[0].files[0];
+        if (file) {
+           downloadUrl = file.url;
+           filename = file.filename || filename;
+        }
+      }
+    } else if (source === 'spigot') {
+       const apiRes = await axios.get(`https://api.spiget.org/v2/resources/${pluginId}`);
+       if (apiRes.data && apiRes.data.file) {
+         if (apiRes.data.file.type === 'external' && apiRes.data.file.externalUrl) {
+           const extUrl = apiRes.data.file.externalUrl;
+           const ghAsset = await resolveGithubRelease(extUrl);
+           if (ghAsset) {
+             downloadUrl = ghAsset.url;
+             filename = ghAsset.filename;
+           }
+           if (!downloadUrl) {
+             return res.status(400).json({ error: "This plugin must be downloaded externally from: " + extUrl });
+           }
+         } else {
+           downloadUrl = `https://api.spiget.org/v2/resources/${pluginId}/download`;
+         }
+       } else {
+         downloadUrl = `https://api.spiget.org/v2/resources/${pluginId}/download`;
+       }
+    } else if (source === 'hangar') {
+       const [owner, slug] = pluginId.split('/');
+       const verRes = await axios.get(`https://hangar.papermc.io/api/v1/projects/${owner}/${slug}/versions`);
+       if (verRes.data && verRes.data.result && verRes.data.result.length > 0) {
+         const version = verRes.data.result[0];
+         const download = version.downloads.PAPER || Object.values(version.downloads)[0];
+         if (download && (download as any).downloadUrl) {
+            downloadUrl = (download as any).downloadUrl;
+            if ((download as any).fileInfo && (download as any).fileInfo.name) {
+                filename = (download as any).fileInfo.name;
+            }
+         } else if (download && (download as any).externalUrl) {
+            const extUrl = (download as any).externalUrl;
+            const ghAsset = await resolveGithubRelease(extUrl);
+            if (ghAsset) {
+              downloadUrl = ghAsset.url;
+              filename = ghAsset.filename;
+            } else {
+              return res.status(400).json({ error: "This plugin must be downloaded externally from: " + extUrl });
+            }
+         }
+       }
+    }
+
+    if (!downloadUrl) {
+      return res.status(404).json({ error: "Could not find a valid download URL for this plugin." });
+    }
+
+    const filePath = path.join(pluginsDir, filename);
+    const response = await axios({
+      url: downloadUrl,
+      method: 'GET',
+      responseType: 'stream',
+      headers: {
+         'User-Agent': 'React-Minecraft-Panel/1.0'
+      }
+    });
+
+    const writer = fs.createWriteStream(filePath);
+    response.data.pipe(writer);
+
+    await new Promise<void>((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    res.json({ success: true, message: "Plugin installed successfully" });
+  } catch (error: any) {
+    console.error("Plugin installation failed:", error.message);
+    res.status(500).json({ error: "Plugin installation failed: " + error.message });
+  }
+};
+
+export const installMod = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { pluginId, pluginName } = req.body; 
+
+  if (!pluginId || !pluginName) {
+    return res.status(400).json({ error: "Missing pluginId or pluginName" });
+  }
+
+  try {
+    const serverDir = path.join(process.cwd(), ".data", "servers", id);
+    const modsDir = path.join(serverDir, "mods");
+    await fs.ensureDir(modsDir);
+    
+    let downloadUrl = null;
+    let filename = `${pluginName.replace(/[^a-zA-Z0-9]/g, '_')}.jar`;
+    const axios = (await import("axios")).default;
+
+    const verRes = await axios.get(`https://api.modrinth.com/v2/project/${pluginId}/version`);
+    if (verRes.data && verRes.data.length > 0) {
+      const file = verRes.data[0].files.find((f: any) => f.primary) || verRes.data[0].files[0];
+      if (file) {
+          downloadUrl = file.url;
+          filename = file.filename || filename;
+      }
+    }
+
+    if (!downloadUrl) {
+      return res.status(404).json({ error: "Could not find a valid download URL for this mod." });
+    }
+
+    const filePath = path.join(modsDir, filename);
+    const response = await axios({
+      url: downloadUrl,
+      method: 'GET',
+      responseType: 'stream',
+      headers: {
+         'User-Agent': 'React-Minecraft-Panel/1.0'
+      }
+    });
+
+    const writer = fs.createWriteStream(filePath);
+    response.data.pipe(writer);
+
+    await new Promise<void>((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    res.json({ success: true, message: "Mod installed successfully" });
+  } catch (error: any) {
+    console.error("Mod installation failed:", error.message);
+    res.status(500).json({ error: "Mod installation failed: " + error.message });
+  }
+};
+
+export const updateResources = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { ram, cpu, disk } = req.body;
+    const servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+    if ((req as any).user.role !== "admin") return res.status(403).json({ error: "Unauthorized" });
+
+    server.ram = Number(ram);
+    server.cpu = Number(cpu);
+    server.disk = Number(disk);
+    await writeJSON("servers.json", servers);
+
+    // Stop container if running
+    if (server.containerId) {
+       try {
+         await stopServerRuntime(server);
+       } catch(e) {}
+    }
+
+    res.json(server);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update resources" });
+  }
+};
+
+export const updateSuspend = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { suspendDuration } = req.body; // permanent, 1_month, 2_months, 24_hours, 1_week, or null
+    const servers = await readJSON("servers.json") || [];
+    const server = servers.find((s: any) => s.id === id);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+    if ((req as any).user.role !== "admin") return res.status(403).json({ error: "Unauthorized" });
+
+    server.suspended = suspendDuration !== null;
+    server.suspendDuration = suspendDuration;
+    await writeJSON("servers.json", servers);
+
+    if (server.suspended && server.containerId) {
+       try {
+         await stopServerRuntime(server);
+       } catch(e) {}
+    }
+
+    res.json(server);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to suspend server" });
+  }
+};
+
+
+==================================================
+File: src/pages/CreateServer.tsx
+==================================================
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import axios from "axios";
+import {
+  ArrowLeft, Server, AlertTriangle, AlignLeft, MemoryStick as MemoryStickIcon,
+  Cpu, Zap, Sparkles, HardDrive, Globe, User, Radio, GitBranch, Check,
+  ChevronDown, Search, Rocket, SlidersHorizontal, FastForward, Network,
+  Wrench, Feather, Info
+} from "lucide-react";
+
+const pageStyles = `
+  .deploy-theme {
+    background: #050505; color: #fff; font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+  }
+  .deploy-theme .font-display { font-family: 'Chakra Petch', sans-serif; }
+  .deploy-theme .font-mono { font-family: 'IBM Plex Mono', monospace; }
+  
+  .deploy-theme .bg-grid {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 95% 70% at 50% 0%, #000 25%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 0%, #000 25%, transparent 78%);
+  }
+  .deploy-theme .scanline {
+    position: fixed; left: 0; right: 0; height: 140px; top: -140px; z-index: 1; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,.028), transparent);
+    animation: scan 10s linear infinite;
+  }
+  @keyframes scan { to { top: 100vh; } }
+  .deploy-theme .noise {
+    position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: .035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  
+  .deploy-theme .corner { position: absolute; width: 12px; height: 12px; }
+  .deploy-theme .c-tl { top: -1px; left: -1px; border-top: 2px solid #fff; border-left: 2px solid #fff; }
+  .deploy-theme .c-tr { top: -1px; right: -1px; border-top: 2px solid #fff; border-right: 2px solid #fff; }
+  .deploy-theme .c-bl { bottom: -1px; left: -1px; border-bottom: 2px solid #fff; border-left: 2px solid #fff; }
+  .deploy-theme .c-br { bottom: -1px; right: -1px; border-bottom: 2px solid #fff; border-right: 2px solid #fff; }
+
+  .deploy-theme .inp {
+    width: 100%; background: #0e0e0e; border: 1px solid #232323; padding: .85rem 1rem; color: #fff; outline: none; transition: border-color .25s, box-shadow .25s; font-size: .95rem;
+  }
+  .deploy-theme .inp::placeholder { color: #4c4c4c; }
+  .deploy-theme .inp:focus { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
+  
+  .deploy-theme .sel-card {
+    position: relative; background: #0e0e0e; border: 1px solid #232323; cursor: pointer; transition: all .28s cubic-bezier(.16,1,.3,1); overflow: hidden;
+  }
+  .deploy-theme .sel-card:hover { transform: translateY(-3px); border-color: #5a5a5a; }
+  .deploy-theme .sel-card.selected { border-color: #fff; background: #131313; box-shadow: 0 0 0 1px #fff, 0 14px 40px -14px rgba(255,255,255,.25); }
+  .deploy-theme .sel-card .tick {
+    position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; background: #fff; color: #000; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(.3); transition: all .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .deploy-theme .sel-card.selected .tick { opacity: 1; transform: scale(1); }
+  .deploy-theme .soft-card .ic { color: #4c4c4c; transition: all .3s; }
+  .deploy-theme .soft-card:hover .ic { color: #cfcfcf; }
+  .deploy-theme .soft-card.selected .ic { color: #fff; filter: drop-shadow(0 0 8px rgba(255,255,255,.5)); }
+
+  .deploy-theme .btn-white { position: relative; overflow: hidden; background: #fff; color: #000; }
+  .deploy-theme .btn-white::before { content: ''; position: absolute; inset: 0; background: #000; transform: translateY(101%); transition: transform .35s cubic-bezier(.16,1,.3,1); }
+  .deploy-theme .btn-white:hover:not(:disabled)::before { transform: translateY(0); }
+  .deploy-theme .btn-white > * { position: relative; z-index: 1; transition: color .35s; }
+  .deploy-theme .btn-white:hover:not(:disabled) > * { color: #fff; }
+  .deploy-theme .btn-white:disabled { opacity: .35; cursor: not-allowed; }
+  
+  .deploy-theme .btn-ghost { background: transparent; border: 1px solid #232323; color: #8f8f8f; transition: all .25s; }
+  .deploy-theme .btn-ghost:hover:not(:disabled) { border-color: #fff; color: #fff; }
+  .deploy-theme .btn-ghost:disabled { opacity: .3; cursor: not-allowed; }
+
+  .deploy-theme .dot { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border: 1px solid #232323; background: #0b0b0b; font-size: 12px; color: #4c4c4c; transition: all .35s cubic-bezier(.16,1,.3,1); }
+  .deploy-theme .dot.active { border-color: #fff; color: #fff; box-shadow: 0 0 0 1px #fff, 0 0 22px -4px rgba(255,255,255,.5); }
+  .deploy-theme .dot.done { background: #fff; color: #000; border-color: #fff; }
+  .deploy-theme .conn-fill { height: 100%; background: #fff; width: 0; transition: width .5s cubic-bezier(.16,1,.3,1); }
+  
+  .deploy-theme .anim-forward { animation: sR .5s cubic-bezier(.16,1,.3,1); }
+  .deploy-theme .anim-back { animation: sL .5s cubic-bezier(.16,1,.3,1); }
+  @keyframes sR { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes sL { from { opacity: 0; transform: translateX(-46px); } to { opacity: 1; transform: translateX(0); } }
+  
+  .deploy-theme .pulse-dot { animation: pd 2.4s infinite; }
+  @keyframes pd { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); } 50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); } }
+`;
+
+const RAM = [
+  {v:1,label:'Small Testing Server'},{v:2,label:'Small Testing Server'},{v:4,label:'Starter Survival'},
+  {v:8,label:'Medium Survival Server'},{v:16,label:'Large Community Server'},
+  {v:24,label:'Heavy Modpack Server'},{v:32,label:'High-Traffic Network'},
+  {v:48,label:'Enterprise Workload'},{v:64,label:'Extreme Performance'},
+];
+const CPU_MAP: Record<number, number> = {1:100,2:100,4:150,8:200,16:300,24:400,32:500,48:700,64:800};
+
+const SOFTWARE = [
+  {id:'paper',name:'Paper',desc:'Performance Vanilla',icon: Zap},
+  {id:'velocity',name:'Velocity',desc:'Next-gen Proxy',icon: FastForward},
+  {id:'bungeecord',name:'BungeeCord',desc:'Classic Proxy',icon: Network},
+  {id:'forge',name:'Forge',desc:'Modded Minecraft',icon: Wrench},
+  {id:'fabric',name:'Fabric',desc:'Lightweight Mods',icon: Feather}
+];
+
+const STEPS = ['IDENTITY','RESOURCES','ACCESS','SOFTWARE','REVIEW'];
+
+// Custom Dropdown Component
+function CustomDropdown({ value, options, onChange, renderValue, renderOption, placeholder }: any) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [wrapperRef]);
+
+  const filtered = options.filter((o: any) => 
+    (o.label || o.name || o.value || o.v || '').toString().toLowerCase().includes(search.toLowerCase())
+  );
+  
+  const selected = options.find((o: any) => (o.value || o.v) === value);
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <button 
+        type="button" 
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between gap-3 inp text-left !py-3 bg-[#0e0e0e]"
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          {selected ? renderValue(selected) : <span className="text-[#4c4c4c]">{placeholder}</span>}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-[#4c4c4c] transition-transform duration-300 shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {open && (
+        <div className="absolute z-50 mt-2 w-full bg-[#0b0b0b] border border-[#232323] shadow-2xl shadow-black/70">
+          <div className="p-2 border-b border-[#232323]">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4c4c4c]" />
+              <input 
+                autoFocus
+                className="w-full bg-[#050505] border border-[#232323] pl-8 pr-2 py-2 text-sm outline-none focus:border-white transition-colors text-white" 
+                placeholder="Search..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto p-1">
+            {filtered.length > 0 ? filtered.map((o: any, i: number) => {
+               const val = o.value || o.v;
+               const isSel = val === value;
+               return (
+                 <div key={i} onClick={() => { onChange(val); setOpen(false); setSearch(''); }}>
+                   {renderOption(o, isSel)}
+                 </div>
+               );
+            }) : <p className="px-3 py-3 text-[11px] text-[#4c4c4c] font-mono">NO RESULTS</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const getInitials = (name: string) => name ? name.slice(0, 2).toUpperCase() : '??';
+
+export default function CreateServer() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  // Data
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [versions, setVersions] = useState<string[]>([]);
+  
+  // Form State
+  const [currentStep, setCurrentStep] = useState(0);
+  const [maxVisited, setMaxVisited] = useState(0);
+  const [deployed, setDeployed] = useState(false);
+  const [deployProgress, setDeployProgress] = useState(0);
+  const [nameError, setNameError] = useState(false);
+  const [dir, setDir] = useState('forward');
+  
+  const [state, setState] = useState({
+    name: '', desc: '', ram: 4, cpu: 150, disk: 10, ip: '', runtimeType: 'docker', 
+    owner: user?.id || '', node: '', software: 'paper', version: 'latest', auto: true
+  });
+
+  useEffect(() => {
+    // Add custom font link
+    const link1 = document.createElement("link");
+    link1.href = "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap";
+    link1.rel = "stylesheet";
+    document.head.appendChild(link1);
+    
+    axios.get("/api/nodes").then((res) => {
+      setNodes(res.data);
+      if (res.data.length > 0 && !state.node) {
+        setState(s => ({ ...s, node: res.data[0].id }));
+      }
+    }).catch(() => {});
+    
+    if (user?.role === "admin" || user?.role === "owner") {
+      axios.get("/api/auth/users").then((res) => setUsers(res.data)).catch(() => {});
+    }
+    
+    return () => {
+      document.head.removeChild(link1);
+    };
+  }, []);
+
+  useEffect(() => {
+    setState(s => ({ ...s, version: '' }));
+    axios.get(`/api/system/versions?type=${state.software}`).then((res) => {
+      const v = Array.isArray(res.data) ? res.data : (res.data.versions || []);
+      setVersions(v);
+      if (v.length > 0) {
+        setState(s => ({ ...s, version: v[0] }));
+      }
+    }).catch(() => {
+      setVersions(['latest']);
+      setState(s => ({ ...s, version: 'latest' }));
+    });
+  }, [state.software]);
+
+  const updateState = (key: string, val: any) => {
+    setState(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleRamClick = (ramVal: number) => {
+    let newCpu = state.cpu;
+    if (state.auto) {
+      newCpu = CPU_MAP[ramVal] || 100;
+    }
+    setState(prev => ({ ...prev, ram: ramVal, cpu: newCpu }));
+  };
+
+  const handleAutoToggle = () => {
+    const nextAuto = !state.auto;
+    setState(prev => ({ 
+      ...prev, 
+      auto: nextAuto, 
+      cpu: nextAuto ? (CPU_MAP[prev.ram] || 100) : prev.cpu 
+    }));
+  };
+
+  const validateStep = () => {
+    if (currentStep === 0 && !state.name.trim()) {
+      setNameError(true);
+      return false;
+    }
+    return true;
+  };
+
+  const showStep = (n: number) => {
+    setDir(n > currentStep ? 'forward' : 'back');
+    setCurrentStep(n);
+    setMaxVisited(Math.max(maxVisited, n));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNext = () => {
+    if (!validateStep()) return;
+    if (currentStep < STEPS.length - 1) {
+      showStep(currentStep + 1);
+    } else {
+      launch();
+    }
+  };
+  
+  const launch = async () => {
+    if (deployed) return;
+    setDeployProgress(1); // shows the progress block
+    
+    // Fake progress interval
+    const iv = setInterval(() => {
+      setDeployProgress(p => Math.min(90, p + Math.random() * 8 + 2));
+    }, 280);
+    
+    try {
+      const payload = {
+        name: state.name,
+        description: state.desc,
+        ram: state.ram,
+        cpuLimit: state.cpu,
+        diskLimit: state.disk,
+        port: 25565, // default
+        ipAlias: state.ip,
+        type: state.software,
+        version: state.version,
+        ownerId: state.owner || user?.id, runtimeType: state.runtimeType,
+        nodeId: state.node
+      };
+      await axios.post("/api/servers", payload);
+      
+      clearInterval(iv);
+      setDeployProgress(100);
+      
+      setTimeout(() => {
+        setDeployed(true);
+      }, 500);
+      
+      setTimeout(() => {
+        navigate("/servers");
+      }, 2500);
+      
+    } catch (e) {
+      clearInterval(iv);
+      setDeployProgress(0);
+      alert("Failed to deploy container");
+    }
+  };
+
+  const renderReviewRow = (k: string, v: string) => (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="text-[#4c4c4c] tracking-widest text-[11px] font-mono">{k}</span>
+      <span className="text-white text-right truncate font-mono">{v}</span>
+    </div>
+  );
+
+  return (
+    <div className="deploy-theme">
+      <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
+      <div className="noise"></div>
+      <div className="bg-grid"></div>
+      <div className="scanline"></div>
+      
+      {/* Progress Line */}
+      <div 
+        style={{ 
+          position: 'fixed', top: 0, left: 0, height: '2px', width: '100%', zIndex: 100, 
+          background: '#fff', transformOrigin: 'left', 
+          transform: `scaleX(${(currentStep + 1) / STEPS.length})`, 
+          boxShadow: '0 0 12px rgba(255,255,255,.7)', transition: 'transform .5s cubic-bezier(.16,1,.3,1)' 
+        }} 
+      />
+
+      <div className="relative z-10">
+        <nav className="sticky top-0 z-50 border-b border-[#232323] bg-[#050505]/90 backdrop-blur-md">
+          <div className="max-w-3xl mx-auto px-5 h-16 flex items-center justify-between">
+            <button onClick={() => navigate('/servers')} className="flex items-center gap-2 font-mono text-[11px] tracking-widest text-[#8f8f8f] hover:text-white transition-colors border border-[#232323] px-3 py-1.5">
+              <ArrowLeft className="w-3.5 h-3.5" /> INSTANCES
+            </button>
+            <a href="#" onClick={(e) => { e.preventDefault(); navigate('/servers'); }} className="flex items-center gap-3 group">
+              <span className="font-display font-bold text-lg tracking-wide">JTG <span className="text-[#8f8f8f] font-medium">PANEL</span></span>
+              <div className="w-7 h-7 bg-white flex items-center justify-center group-hover:rotate-45 transition-transform duration-500">
+                <div className="w-3.5 h-3.5 bg-black"></div>
+              </div>
+            </a>
+          </div>
+        </nav>
+
+        <main className="max-w-3xl mx-auto px-5 pt-12 pb-16">
+          <header className="mb-10">
+            <p className="font-mono text-[11px] tracking-[0.3em] text-[#4c4c4c] mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-white rounded-full pulse-dot"></span> NEW CONTAINER
+            </p>
+            <h1 className="font-display font-bold tracking-tight text-4xl md:text-5xl">DEPLOY INSTANCE</h1>
+          </header>
+
+          {/* Stepper */}
+          <div className="mb-4">
+            <div className="flex items-start">
+              {STEPS.map((s, i) => (
+                <React.Fragment key={i}>
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: '56px' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => { if (i <= maxVisited && i !== currentStep && !deployed) showStep(i); }}
+                      className={`dot font-mono ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}`}
+                    >
+                      {i < currentStep ? <Check className="w-4 h-4 stroke-[3]" /> : String(i + 1).padStart(2, '0')}
+                    </button>
+                    <span className="hidden sm:block mt-2 font-mono text-[9px] tracking-widest text-[#4c4c4c] text-center">
+                      {s}
+                    </span>
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div className="flex-1 h-px bg-[#232323] mt-[19px] mx-1">
+                      <div className="conn-fill" style={{ width: i < currentStep ? '100%' : '0%' }}></div>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            <p className="sm:hidden mt-4 font-mono text-[11px] tracking-widest text-[#8f8f8f] text-center">
+              STEP {currentStep + 1} OF {STEPS.length} — {STEPS[currentStep]}
+            </p>
+          </div>
+
+          <div className="relative border border-[#232323] bg-[#0b0b0b] p-6 md:p-9 mt-6">
+            <span className="corner c-tl"></span><span className="corner c-tr"></span>
+            <span className="corner c-bl"></span><span className="corner c-br"></span>
+
+            <div className={`${dir === 'forward' ? 'anim-forward' : 'anim-back'}`}>
+              
+              {/* STEP 1: IDENTITY */}
+              {currentStep === 0 && (
+                <div className="step-content">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="font-mono text-xs text-[#4c4c4c]">01</span>
+                    <h2 className="font-display font-bold tracking-wide text-sm">IDENTITY</h2>
+                    <span className="flex-1 h-px bg-[#232323]"></span>
+                  </div>
+                  
+                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+                    <Server className="w-4 h-4" /> Instance Name <span className="text-white">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    className={`inp ${nameError ? 'border-red-500' : ''}`} 
+                    placeholder="e.g. Production Survival" 
+                    value={state.name}
+                    onChange={(e) => { updateState('name', e.target.value); setNameError(false); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNext(); } }}
+                  />
+                  {nameError && (
+                    <p className="mt-2 text-xs text-red-400 font-mono flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Instance name is required.
+                    </p>
+                  )}
+
+                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5 mt-7">
+                    <AlignLeft className="w-4 h-4" /> Description
+                  </label>
+                  <textarea 
+                    className="inp" 
+                    style={{ resize: 'vertical', minHeight: '96px', fontFamily: '"IBM Plex Sans", sans-serif' }}
+                    placeholder="Short description of this server (optional)"
+                    value={state.desc}
+                    onChange={(e) => updateState('desc', e.target.value)}
+                  />
+                  <p className="text-[11px] text-[#4c4c4c] mt-2 font-mono">Helps your team identify this instance later.</p>
+                </div>
+              )}
+
+              {/* STEP 2: RESOURCES */}
+              {currentStep === 1 && (
+                <div className="step-content">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="font-mono text-xs text-[#4c4c4c]">02</span>
+                    <h2 className="font-display font-bold tracking-wide text-sm">RESOURCES</h2>
+                    <span className="flex-1 h-px bg-[#232323]"></span>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-4">
+                    <MemoryStickIcon className="w-4 h-4" /> RAM Allocation (GB)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {RAM.map(r => (
+                      <button 
+                        key={r.v} 
+                        type="button" 
+                        onClick={() => handleRamClick(r.v)}
+                        className={`sel-card p-4 text-left ${r.v === state.ram ? 'selected' : ''}`}
+                      >
+                        <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
+                        <div className="font-display font-bold text-2xl text-white">
+                          {r.v}<span className="text-sm text-[#8f8f8f] ml-1">GB</span>
+                        </div>
+                        <div className="text-[11px] text-[#8f8f8f] mt-1.5 leading-snug">{r.label}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-8">
+                    <div>
+                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+                        <Cpu className="w-4 h-4" /> CPU Limit (%)
+                      </label>
+                      <div className="flex gap-2.5">
+                        <div className="relative flex-1">
+                          <input 
+                            type="number" min="10" 
+                            className="inp font-mono pr-10" 
+                            value={state.cpu}
+                            onChange={(e) => { updateState('cpu', Number(e.target.value)); updateState('auto', false); }}
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4c4c4c] font-mono text-sm">%</span>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={handleAutoToggle}
+                          className={`px-4 py-3 font-display font-bold text-sm tracking-widest transition-all flex items-center gap-2 whitespace-nowrap border ${state.auto ? 'bg-white text-black border-white' : 'bg-transparent text-[#8f8f8f] border-[#232323]'}`}
+                        >
+                          {state.auto ? <><Zap className="w-4 h-4" /> AUTO</> : <><SlidersHorizontal className="w-4 h-4" /> MANUAL</>}
+                        </button>
+                      </div>
+                      <p className={`text-[11px] mt-2.5 font-mono flex items-center gap-1.5 ${state.auto ? 'text-[#8f8f8f]' : 'text-[#4c4c4c]'}`}>
+                        {state.auto 
+                          ? <><Sparkles className="w-3.5 h-3.5" /> Auto-optimized for {state.ram}GB</> 
+                          : <><SlidersHorizontal className="w-3.5 h-3.5" /> Manual override active</>
+                        }
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+                        <HardDrive className="w-4 h-4" /> Disk Limit (GB)
+                      </label>
+                      <input 
+                        type="number" min="1" 
+                        className="inp font-mono" 
+                        value={state.disk}
+                        onChange={(e) => updateState('disk', Number(e.target.value))}
+                      />
+                      <p className="text-[11px] text-[#4c4c4c] mt-2.5 font-mono flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5" /> Storage space allocated to this server.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: NETWORK & ACCESS */}
+              {currentStep === 2 && (
+                <div className="step-content">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="font-mono text-xs text-[#4c4c4c]">03</span>
+                    <h2 className="font-display font-bold tracking-wide text-sm">NETWORK & ACCESS</h2>
+                    <span className="flex-1 h-px bg-[#232323]"></span>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+                    <Globe className="w-4 h-4" /> IP Alias
+                  </label>
+                  <input 
+                    type="text" className="inp font-mono" placeholder="play.example.com" 
+                    value={state.ip} onChange={e => updateState('ip', e.target.value)}
+                  />
+                  <p className="text-[11px] text-[#4c4c4c] mt-2 mb-8 font-mono">Optional custom domain or subdomain used to access your server.</p>
+
+                  {(user?.role === "admin" || user?.role === "owner") && (
+                    <>
+                      <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+                        <User className="w-4 h-4" /> Assign Server Owner
+                      </label>
+                      <CustomDropdown
+                        value={state.owner}
+                        options={users.map(u => ({ v: u.id, name: u.username, tag: u.role, role: u.role }))}
+                        onChange={(v: string) => updateState('owner', v)}
+                        placeholder="Select an owner..."
+                        renderValue={(o: any) => (
+                          <>
+                            <span className="w-8 h-8 rounded-full border border-[#232323] bg-[#0e0e0e] flex items-center justify-center font-display font-bold text-[11px] text-white shrink-0">
+                              {getInitials(o.name)}
+                            </span>
+                            <span className="truncate text-white font-mono text-sm">{o.name} <span className="text-[#8f8f8f]">({o.tag})</span></span>
+                          </>
+                        )}
+                        renderOption={(o: any, sel: boolean) => (
+                          <button type="button" className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors ${sel ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                            <span className="w-8 h-8 rounded-full border border-[#232323] bg-[#0e0e0e] flex items-center justify-center font-display font-bold text-[11px] text-white shrink-0">
+                              {getInitials(o.name)}
+                            </span>
+                            <span className="flex-1 text-left font-mono">
+                              <span className="block text-sm text-white">{o.name} <span className="text-[#8f8f8f]">({o.tag})</span></span>
+                              <span className="block text-[11px] text-[#4c4c4c]">{o.role}</span>
+                            </span>
+                            {sel && <Check className="w-4 h-4 text-white" />}
+                          </button>
+                        )}
+                      />
+                      <p className="text-[11px] text-[#4c4c4c] mt-2 mb-8 font-mono">Select which user owns and has access to this server.</p>
+                      
+                      
+    <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+      <Radio className="w-4 h-4" /> Runtime Environment
+    </label>
+    <div className="flex gap-4 mb-2">
+      <button 
+        type="button" 
+        onClick={() => updateState('runtimeType', 'docker')}
+        className={`flex-1 p-3 border ${state.runtimeType === 'docker' ? 'border-white bg-white/5' : 'border-[#232323] hover:border-[#4c4c4c]'} text-left`}
+      >
+        <span className="block font-display font-bold text-sm text-white mb-1">Docker Container</span>
+        <span className="block text-[11px] text-[#8f8f8f] font-mono leading-tight">Isolated, secure, requires Docker engine</span>
+      </button>
+      <button 
+        type="button" 
+        onClick={() => updateState('runtimeType', 'local')}
+        className={`flex-1 p-3 border ${state.runtimeType === 'local' ? 'border-white bg-white/5' : 'border-[#232323] hover:border-[#4c4c4c]'} text-left`}
+      >
+        <span className="block font-display font-bold text-sm text-white mb-1">Local Process</span>
+        <span className="block text-[11px] text-[#8f8f8f] font-mono leading-tight">Runs natively. WARNING: Uses host networking directly</span>
+      </button>
+    </div>
+    <p className="text-[11px] text-[#4c4c4c] mt-2 mb-8 font-mono">How this server should be executed.</p>
+
+    <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5">
+      <Radio className="w-4 h-4" /> Deployment Node
+    </label>
+                      <CustomDropdown
+                        value={state.node}
+                        options={nodes.map(n => ({ v: n.id, label: n.name + ' (' + n.ip + ')' }))}
+                        onChange={(v: string) => updateState('node', v)}
+                        placeholder="Select a node..."
+                        renderValue={(o: any) => (
+                          <>
+                            <Radio className="w-4 h-4 text-white shrink-0" />
+                            <span className="text-white truncate font-mono text-sm">{o.label}</span>
+                          </>
+                        )}
+                        renderOption={(o: any, sel: boolean) => (
+                          <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 font-mono text-sm transition-colors ${sel ? 'text-white bg-white/5' : 'text-[#8f8f8f] hover:bg-white/5'}`}>
+                            <span>{o.label}</span>
+                            {sel && <Check className="w-4 h-4 text-white" />}
+                          </button>
+                        )}
+                      />
+                      <p className="text-[11px] text-[#4c4c4c] mt-2 font-mono">Physical node this container will be deployed to.</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 4: SOFTWARE */}
+              {currentStep === 3 && (
+                <div className="step-content">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="font-mono text-xs text-[#4c4c4c]">04</span>
+                    <h2 className="font-display font-bold tracking-wide text-sm">SERVER SOFTWARE</h2>
+                    <span className="flex-1 h-px bg-[#232323]"></span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {SOFTWARE.map(s => {
+                      const Icon = s.icon;
+                      return (
+                        <button 
+                          key={s.id} 
+                          type="button" 
+                          onClick={() => updateState('software', s.id)}
+                          className={`sel-card soft-card p-4 flex flex-col items-center text-center ${state.software === s.id ? 'selected' : ''}`}
+                        >
+                          <span className="tick"><Check className="w-3 h-3 stroke-[3]" /></span>
+                          <Icon className="ic w-7 h-7 mb-3" />
+                          <span className="font-display font-semibold text-sm text-white">{s.name}</span>
+                          <span className="text-[10px] text-[#4c4c4c] mt-1 leading-tight">{s.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-[#8f8f8f] mb-2.5 mt-8">
+                    <GitBranch className="w-4 h-4" /> Software Version
+                  </label>
+                  <CustomDropdown
+                    value={state.version}
+                    options={versions.map(v => ({ v, label: v }))}
+                    onChange={(v: string) => updateState('version', v)}
+                    placeholder="Select a version..."
+                    renderValue={(o: any) => (
+                      <>
+                        <GitBranch className="w-4 h-4 text-white shrink-0" />
+                        <span className="font-mono text-white text-sm">{o.label}</span>
+                      </>
+                    )}
+                    renderOption={(o: any, sel: boolean) => (
+                      <button type="button" className={`w-full flex items-center justify-between px-3 py-2.5 font-mono text-sm transition-colors ${sel ? 'text-white bg-white/5' : 'text-[#8f8f8f] hover:bg-white/5'}`}>
+                        <span>{o.label}</span>
+                        {sel && <Check className="w-4 h-4 text-white" />}
+                      </button>
+                    )}
+                  />
+                </div>
+              )}
+
+              {/* STEP 5: REVIEW */}
+              {currentStep === 4 && (
+                <div className="step-content">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="font-mono text-xs text-[#4c4c4c]">05</span>
+                    <h2 className="font-display font-bold tracking-wide text-sm">FINAL SPECIFICATION</h2>
+                    <span className="flex-1 h-px bg-[#232323]"></span>
+                  </div>
+                  
+                  {!deployed && deployProgress === 0 && (
+                    <>
+                      <div className="font-mono text-[13px] divide-y divide-[#232323] border border-[#232323] bg-[#0e0e0e]">
+                        {renderReviewRow('INSTANCE', state.name || '—')}
+  {renderReviewRow('RUNTIME', state.runtimeType === 'local' ? 'Local Process' : 'Docker')}
+                        {renderReviewRow('DESCRIPTION', state.desc || '—')}
+                        {renderReviewRow('RAM', state.ram + ' GB')}
+                        {renderReviewRow('CPU ' + (state.auto ? '(AUTO)' : '(MANUAL)'), state.cpu + ' %')}
+                        {renderReviewRow('DISK', state.disk + ' GB')}
+                        {renderReviewRow('IP ALIAS', state.ip || '—')}
+                        {(user?.role === "admin" || user?.role === "owner") && renderReviewRow('OWNER ID', state.owner || '—')}
+                        {(user?.role === "admin" || user?.role === "owner") && renderReviewRow('NODE ID', state.node || '—')}
+                        {renderReviewRow('SOFTWARE', SOFTWARE.find(s => s.id === state.software)?.name || 'Unknown')}
+                        {renderReviewRow('VERSION', state.version || 'latest')}
+                        
+                        <div className="px-4 py-4">
+                          <div className="flex justify-between text-[10px] text-[#4c4c4c] tracking-widest mb-2 font-mono">
+                            <span>EST. HOST FOOTPRINT</span>
+                            <span>{Math.min(100, Math.round(state.ram / 32 * 100))}%</span>
+                          </div>
+                          <div className="w-full bg-[#232323] h-1.5 overflow-hidden">
+                            <div className="h-full bg-white transition-all duration-500" style={{ width: `${Math.min(100, Math.round(state.ram / 32 * 100))}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {deployProgress > 0 && !deployed && (
+                    <div className="mt-6 border border-[#232323] bg-[#0e0e0e] p-4">
+                      <div className="flex justify-between items-center mb-2.5">
+                        <span className="text-sm font-mono text-[#8f8f8f]">Provisioning container...</span>
+                        <span className="text-sm font-mono text-white">{Math.round(deployProgress)}%</span>
+                      </div>
+                      <div className="w-full bg-[#232323] h-1.5 overflow-hidden">
+                        <div className="h-full bg-white transition-all duration-300" style={{ width: `${deployProgress}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {deployed && (
+                    <div className="mt-6 border border-white bg-white/5 p-6 text-center">
+                      <div className="w-12 h-12 mx-auto mb-3 bg-white text-black flex items-center justify-center">
+                        <Check className="w-6 h-6 stroke-[3]" />
+                      </div>
+                      <p className="font-display font-bold text-lg">Instance Deployed</p>
+                      <p className="text-[#8f8f8f] text-sm mt-1 font-mono">
+                        {state.name} → {state.ram}GB
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* NAV */}
+            <div className="flex items-center justify-between gap-3 mt-9 pt-7 border-t border-[#232323]">
+              <button 
+                type="button" 
+                onClick={() => { if (currentStep > 0) showStep(currentStep - 1); }}
+                disabled={currentStep === 0 || deployed || deployProgress > 0}
+                className="btn-ghost px-5 py-3 text-sm font-medium flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> BACK
+              </button>
+              
+              <span className="font-mono text-[11px] tracking-widest text-[#4c4c4c] hidden sm:block">
+                STEP {currentStep + 1} / {STEPS.length}
+              </span>
+              
+              <button 
+                type="button" 
+                onClick={handleNext}
+                disabled={deployed || deployProgress > 0}
+                className="btn-white px-7 py-3 text-sm font-display font-bold tracking-widest flex items-center gap-2"
+              >
+                <span>{currentStep === STEPS.length - 1 ? (deployed ? 'DEPLOYED' : 'LAUNCH') : 'NEXT'}</span>
+                {currentStep === STEPS.length - 1 ? <Rocket className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4 rotate-180" />}
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
