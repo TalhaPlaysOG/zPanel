@@ -16,8 +16,9 @@ import AccountPage from "./pages/AccountPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import ApiKeysPage from "./pages/ApiKeysPage";
 import AdminServers from "./pages/AdminServers";
-import PlayitTunnel from "./pages/PlayitTunnel";
-import Nodes from "./pages/Nodes";
+import PlayitPage from "./pages/PlayitPage";
+import UsersPage from "./pages/UsersPage";
+import SettingsPage from "./pages/SettingsPage";
 import Layout from "./components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
@@ -57,14 +58,14 @@ const AnimatedRoutes = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/nodes" element={<ProtectedRoute><Nodes /></ProtectedRoute>} />
           <Route path="/servers" element={<ProtectedRoute><ServerList /></ProtectedRoute>} />
           <Route path="/servers/create" element={<ProtectedRoute><CreateServer /></ProtectedRoute>} />
           <Route path="/servers/:id/*" element={<ProtectedRoute><ServerView /></ProtectedRoute>} />
-          <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute><AdminSettingsPage /></ProtectedRoute>} />
-          <Route path="/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
-          <Route path="/admin/servers" element={<ProtectedRoute><AdminServers /></ProtectedRoute>} />
+          <Route path="/playit" element={<ProtectedRoute><PlayitPage /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/account" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
       </motion.div>
     </AnimatePresence>

@@ -18,9 +18,8 @@ import PlayerManager from "../components/PlayerManager";
 import SubUsersManager from "../components/SubUsersManager";
 import ServerSFTP from "../components/ServerSFTP";
 import PlayitTunnel from "./PlayitTunnel";
-import CloudflareTunnel from "./CloudflareTunnel";
 import WorldManager from "../components/WorldManager";
-import { Map, Cloud } from "lucide-react";
+import { Map } from "lucide-react";
 import { Puzzle, Box, Network } from "lucide-react";
 import { Settings, Globe } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
@@ -154,12 +153,6 @@ export default function ServerView() {
     if (enablePlayit) {
       tabs.push(
         { name: "Playit Tunnel", path: `/servers/${id}/playit`, exactPath: "playit", icon: <Globe size={18} /> }
-      );
-    }
-
-    if (enableCloudflare !== false) {
-      tabs.push(
-        { name: "Cloudflare Tunnel", path: `/servers/${id}/cloudflare`, exactPath: "cloudflare", icon: <Cloud size={18} /> }
       );
     }
   }
@@ -389,7 +382,6 @@ export default function ServerView() {
              <Route path="/plugins" element={<PluginManager serverId={id!} />} />
              <Route path="/mods" element={<ModManager serverId={id!} />} />
              {enablePlayit && <Route path="/playit" element={<PlayitTunnel serverId={id!} />} />}
-             {enableCloudflare !== false && <Route path="/cloudflare" element={<CloudflareTunnel serverId={id!} server={server} />} />}
            </Routes>
         </div>
       </div>

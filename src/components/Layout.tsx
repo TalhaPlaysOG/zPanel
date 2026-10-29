@@ -47,7 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return '';
   };
 
-  if (isServerView || isCreateServer || isAdminSettings) {
+  if (isServerView || isCreateServer) {
     return (
       <div className="flex h-[100dvh] w-full bg-transparent text-foreground font-sans overflow-hidden selection:bg-theme-600/30">
         <main className="flex-1 w-full h-full relative z-10 overflow-auto">

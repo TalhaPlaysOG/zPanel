@@ -10,7 +10,6 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
   const [panelBackgroundImage, setPanelBackgroundImage] = useState<string>("");
   const [panelBackgroundBlur, setPanelBackgroundBlur] = useState<number>(10);
   const [enablePlayit, setEnablePlayit] = useState<boolean>(false);
-  const [enableCloudflare, setEnableCloudflare] = useState<boolean>(true);
   const [enableTutorial, setEnableTutorial] = useState<boolean>(true);
   const [enableLoginAnimation, setEnableLoginAnimation] = useState<boolean>(true);
   const [enableRegistration, setEnableRegistration] = useState<boolean>(true);
@@ -32,7 +31,6 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
       if (res.data.panelBackgroundImage !== undefined) setPanelBackgroundImage(res.data.panelBackgroundImage);
       if (res.data.panelBackgroundBlur !== undefined) setPanelBackgroundBlur(res.data.panelBackgroundBlur);
       if (res.data.enablePlayit !== undefined) setEnablePlayit(res.data.enablePlayit);
-      if (res.data.enableCloudflare !== undefined) setEnableCloudflare(res.data.enableCloudflare);
       if (res.data.enableTutorial !== undefined) setEnableTutorial(res.data.enableTutorial);
       if (res.data.enableLoginAnimation !== undefined) setEnableLoginAnimation(res.data.enableLoginAnimation);
       if (res.data.enableRegistration !== undefined) setEnableRegistration(res.data.enableRegistration);
@@ -100,7 +98,6 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
       panelBackgroundImage, setPanelBackgroundImage, 
       panelBackgroundBlur, setPanelBackgroundBlur, 
       enablePlayit, setEnablePlayit, 
-      enableCloudflare, setEnableCloudflare, 
       enableTutorial, setEnableTutorial,
       enableLoginAnimation, setEnableLoginAnimation,
       enableRegistration, setEnableRegistration,

@@ -31,7 +31,7 @@ export default function AdminSettingsPage(): React.ReactElement {
   const { user, logout, updateUser } = useAuth();
   const { 
     panelName, panelLogo, panelBackgroundImage, panelBackgroundBlur, 
-    enablePlayit, enableCloudflare, enableTutorial, enableLoginAnimation, enableRegistration, theme, setTheme, 
+    enablePlayit, enableTutorial, enableLoginAnimation, enableRegistration, theme, setTheme, 
     enableGoogleLogin, firebaseApiKey, firebaseAuthDomain, firebaseProjectId, 
     firebaseStorageBucket, firebaseMessagingSenderId, firebaseAppId, defaultRuntime, 
     fetchSettings 
@@ -80,7 +80,6 @@ export default function AdminSettingsPage(): React.ReactElement {
   };
   const [newPanelName, setNewPanelName] = useState(panelName);
   const [newEnablePlayit, setNewEnablePlayit] = useState(enablePlayit);
-  const [newEnableCloudflare, setNewEnableCloudflare] = useState(enableCloudflare !== false);
   const [newEnableTutorial, setNewEnableTutorial] = useState(enableTutorial);
   const [newEnableLoginAnimation, setNewEnableLoginAnimation] = useState(enableLoginAnimation);
   const [newEnableRegistration, setNewEnableRegistration] = useState(enableRegistration);
@@ -133,7 +132,6 @@ export default function AdminSettingsPage(): React.ReactElement {
   useEffect(() => {
     setNewPanelName(panelName);
     setNewEnablePlayit(enablePlayit);
-    setNewEnableCloudflare(enableCloudflare !== false);
     setNewEnableTutorial(enableTutorial);
     setNewEnableLoginAnimation(enableLoginAnimation);
     setNewEnableRegistration(enableRegistration);
@@ -147,7 +145,7 @@ export default function AdminSettingsPage(): React.ReactElement {
     setFbAppId(firebaseAppId || "");
     setCustomBgUrlInput(panelBackgroundImage || "");
     setNewDefaultRuntime(defaultRuntime || 'docker');
-  }, [defaultRuntime, panelName, panelBackgroundImage, enablePlayit, enableCloudflare, enableTutorial, enableLoginAnimation, enableRegistration, theme, setTheme, enableGoogleLogin, firebaseApiKey, firebaseAuthDomain, firebaseProjectId, firebaseStorageBucket, firebaseMessagingSenderId, firebaseAppId]);
+  }, [defaultRuntime, panelName, panelBackgroundImage, enablePlayit, enableTutorial, enableLoginAnimation, enableRegistration, theme, setTheme, enableGoogleLogin, firebaseApiKey, firebaseAuthDomain, firebaseProjectId, firebaseStorageBucket, firebaseMessagingSenderId, firebaseAppId]);
 
   const handleSaveFirebaseSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -665,29 +663,6 @@ export default function AdminSettingsPage(): React.ReactElement {
                       setNewEnablePlayit(val);
                       try {
                         await axios.put("/api/system/settings", { enablePlayit: val });
-                        fetchSettings();
-                      } catch (err) { console.error(err); }
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-600"></div>
-                </label>
-              </div>
-
-              <div className="flex items-start justify-between gap-4 p-4 rounded-2xl bg-muted/50 border border-border-subtle">
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Cloudflare Tunnel Integration</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Enable Cloudflare Quick Tunnels (*.trycloudflare.com) and Zero Trust token tunnels.</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
-                  <input 
-                    type="checkbox" 
-                    checked={newEnableCloudflare} 
-                    onChange={async (e: any) => {
-                      const val = e.target.checked;
-                      setNewEnableCloudflare(val);
-                      try {
-                        await axios.put("/api/system/settings", { enableCloudflare: val });
                         fetchSettings();
                       } catch (err) { console.error(err); }
                     }}
