@@ -75,7 +75,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 6767;
 
 app.use(express.json({ limit: "50gb" }));
 app.use(express.urlencoded({ extended: true, limit: "50gb" }));
