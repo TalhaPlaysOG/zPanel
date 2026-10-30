@@ -1,5 +1,12 @@
 import express from "express";
 import { getVersions } from "../services/docker.js";
+import {
+  detectJavaRuntimes,
+  getJavaInstallStatus,
+  clearJavaCache,
+  installJava,
+  getRequiredJavaVersion,
+} from "../services/java.js";
 import { requireAuth } from "../middleware/auth.js";
 import os from "os";
 import { exec } from "child_process";
@@ -11,6 +18,52 @@ import bcrypt from "bcryptjs";
 const router = express.Router();
 
 router.use(requireAuth);
+
+// Java runtime management endpoints
+router.get("/java-runtimes", async (_req, res) => {
+  try {
+    const status = await getJavaInstallStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to detect Java runtimes" });
+  }
+});
+
+router.post("/java-runtimes/recheck", async (_req, res) => {
+  try {
+    clearJavaCache();
+    const status = await getJavaInstallStatus();
+    res.json({ success: true, ...status });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to recheck Java runtimes" });
+  }
+});
+
+router.post("/java-runtimes/install", async (req, res) => {
+  const user = (req as any).user;
+  if (user.role !== "admin" && user.role !== "owner") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const { version } = req.body;
+  if (!version) {
+    return res.status(400).json({ error: "Java version is required (e.g. 21, 25)" });
+  }
+  try {
+    const result = await installJava(String(version));
+    if (result.success) {
+      res.json({ success: true, message: `Java ${version} installed successfully.` });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error,
+        command: result.command,
+        message: `Automatic installation of Java ${version} failed. Run this command manually: ${result.command}`,
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to install Java runtime" });
+  }
+});
 
 router.get("/versions", async (req, res) => {
   const type = (req.query.type as string) || "PAPER";

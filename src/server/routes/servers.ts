@@ -3,6 +3,7 @@ import path from "path";
 import { importWorld, getWorldInfo, analyzeWorld } from "../controllers/world.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getServers, createServer, checkPort, getServer, getServerLogs, deleteServer, startServer, stopServer, restartServer, changeServerVersion, migrateServerRuntime, getFiles, uploadFile, uploadChunk, completeUpload, deleteFile, renameFile, saveFileContent, sendCommand, getServerStats, updateOwner, updateIpAlias, getBackups, createBackup, downloadBackup, deleteBackup, restoreBackup, unzipFile, zipFiles, installPlugin, installMod, updateResources, updateSuspend , createFile, createDirectory, downloadFile} from "../controllers/servers.js";
+import { getJavaInstallStatus, resolveJavaBinary, validateJavaRuntime, getRequiredJavaVersion } from "../services/java.js";
 import multer from "multer";
 
 const router = express.Router();
@@ -16,6 +17,49 @@ router.post("/", createServer);
 router.get("/:id", getServer);
 router.get("/:id/logs", getServerLogs);
 router.get("/:id/stats", getServerStats);
+
+// Server Java runtime info
+router.get("/:id/java-runtime", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const servers = await (await import("fs/promises")).readFile(path.join(process.cwd(), ".data", "servers.json"), "utf8");
+    const parsed = JSON.parse(servers);
+    const server = parsed.find((s: any) => s.id === id);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+
+    const requiredVersion = getRequiredJavaVersion(String(server.version || "latest"), String(server.type || "paper"));
+    const configuredVersion = server.javaVersion || null;
+    const status = await getJavaInstallStatus();
+    let resolved: string | null = null;
+    let validation: { valid: boolean; version?: string; error?: string } | null = null;
+
+    if (configuredVersion) {
+      resolved = await resolveJavaBinary(configuredVersion);
+      if (resolved) {
+        validation = await validateJavaRuntime(resolved, configuredVersion);
+      }
+    } else {
+      resolved = await resolveJavaBinary(requiredVersion);
+      if (resolved) {
+        validation = await validateJavaRuntime(resolved, requiredVersion);
+      }
+    }
+
+    res.json({
+      serverId: id,
+      requiredVersion,
+      configuredVersion,
+      resolvedPath: resolved,
+      validation,
+      availableRuntimes: status.versions,
+      recommendedVersion: status.recommendedVersion,
+      javaMissing: status.missing,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to get Java runtime info" });
+  }
+});
+
 router.delete("/:id", deleteServer);
 router.put("/:id/owner", updateOwner);
 router.put("/:id/ipalias", updateIpAlias);

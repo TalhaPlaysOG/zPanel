@@ -12,6 +12,13 @@ import {
   jarFileNameFor,
   normalizeType,
 } from "./jarDownloader.js";
+import {
+  resolveJavaBinary,
+  validateJavaRuntime,
+  getJavaInstallStatus,
+  clearJavaCache,
+  getRequiredJavaVersion,
+} from "./java.js";
 import { panelEvents } from "../events.js";
 import { readJSON, writeJSON } from "./db.js";
 
@@ -173,46 +180,39 @@ const closeLogStream = (id: string) => {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Java discovery                                                     */
+/*  Java discovery (delegated to java.ts service)                     */
 /* ------------------------------------------------------------------ */
 
-export const resolveJavaBinary = async (): Promise<string> => {
-  if (process.env.JAVA_BIN && (await fs.pathExists(process.env.JAVA_BIN))) {
-    return process.env.JAVA_BIN;
-  }
+/**
+ * Resolve the Java executable for a server, honouring the server's
+ * configured javaVersion when present and falling back to automatic
+ * detection. Returns null when no usable Java runtime exists.
+ *
+ * The result is validated before being returned so callers never receive
+ * a path that cannot be executed.
+ */
+export const resolveServerJavaBinary = async (
+  serverData: any,
+  requiredVersion?: string
+): Promise<string | null> => {
+  const configuredVersion = requiredVersion || serverData?.javaVersion;
+  const javaBin = await resolveJavaBinary(configuredVersion);
+  if (!javaBin) return null;
 
-  const isWin = process.platform === "win32";
-  const candidates = isWin
-    ? [
-        "java",
-        "C:\\Program Files\\Java\\jdk-21\\bin\\java.exe",
-        "C:\\Program Files\\Java\\jdk-17\\bin\\java.exe",
-        "C:\\Program Files\\Eclipse Adoptium\\jdk-21\\bin\\java.exe",
-      ]
-    : [
-        "java",
-        "/usr/bin/java",
-        "/usr/local/bin/java",
-        "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
-        "/usr/lib/jvm/java-17-openjdk-amd64/bin/java",
-        "/usr/lib/jvm/java-11-openjdk-amd64/bin/java",
-        "/usr/lib/jvm/default-java/bin/java",
-        "/opt/java/openjdk/bin/java",
-      ];
-
-  for (const candidate of candidates) {
-    if (candidate === "java") {
-      try {
-        await execAsync(isWin ? "where java" : "which java");
-        return "java";
-      } catch {
-        /* try next */
+  const validation = await validateJavaRuntime(javaBin, configuredVersion);
+  if (!validation.valid) {
+    // If the configured version is unsuitable, try auto-detect without a
+    // version constraint as a last resort.
+    if (configuredVersion) {
+      const fallback = await resolveJavaBinary(undefined);
+      if (fallback) {
+        const fbValidation = await validateJavaRuntime(fallback, undefined);
+        if (fbValidation.valid) return fallback;
       }
-    } else if (await fs.pathExists(candidate)) {
-      return candidate;
     }
+    return null;
   }
-  return process.env.JAVA_BIN || "java";
+  return javaBin;
 };
 
 /* ------------------------------------------------------------------ */
@@ -301,7 +301,10 @@ export const createLocalServer = async (serverData: any) => {
 const ensureForgeInstalled = async (id: string, serverData: any, serverDir: string) => {
   const existing = await findForgeArgsFile(serverDir);
   if (existing) return existing;
-  const javaBin = await resolveJavaBinary();
+  const javaBin = await resolveServerJavaBinary(serverData);
+  if (!javaBin) {
+    throw new Error("No compatible Java runtime found. Install Java 21 or Java 25 to run Forge servers.");
+  }
   panelLog(id, `Forge launch files not found. Running the official installer for ${serverData.version || "latest"}…`);
   const result = await downloadJar("forge", serverData.version || "latest", path.join(serverDir, "server.jar"), (progress) => {
     if (progress.message) panelLog(id, progress.message);
@@ -505,7 +508,33 @@ export const startLocalServer = async (id: string, serverData: any) => {
       // Ensure the EULA is accepted for Minecraft servers.
       await fs.writeFile(path.join(serverPath, "eula.txt"), "eula=true\n");
 
-      const javaBin = await resolveJavaBinary();
+      // Determine the Java version required by this Minecraft version/software.
+      const requiredJava = serverData.javaVersion
+        ? String(serverData.javaVersion)
+        : getRequiredJavaVersion(String(serverData.version || "latest"), type);
+
+      const javaBin = await resolveServerJavaBinary(serverData, requiredJava);
+      if (!javaBin) {
+        const status = await getJavaInstallStatus();
+        const missingMsg = status.missing
+          ? "No Java runtime is installed on this system."
+          : `Java ${requiredJava} or higher is required but no compatible runtime was found.`;
+        const error = `Failed to start server process: Java runtime not found (${missingMsg}). Install Java ${requiredJava} or use the panel's Java Runtime management to install it.`;
+        panelLog(id, error);
+        setStatus(id, "error", { error });
+        closeLogStream(id);
+        throw new Error(error);
+      }
+
+      const validation = await validateJavaRuntime(javaBin, requiredJava);
+      if (!validation.valid) {
+        const error = `Failed to start server process: ${validation.error}`;
+        panelLog(id, error);
+        setStatus(id, "error", { error });
+        closeLogStream(id);
+        throw new Error(error);
+      }
+
       const memoryValue = Number(serverData.ram);
       const memory = Number.isFinite(memoryValue) && memoryValue > 0 ? memoryValue : 1;
 
@@ -642,11 +671,30 @@ export const startLocalServer = async (id: string, serverData: any) => {
     clearTimers();
     state.lastError = err.message;
     panelLog(id, `Failed to start server process: ${err.message}`);
+
     if (err.message.includes("ENOENT")) {
       panelLog(id, "---- RUNTIME NOTICE ----");
       panelLog(id, `Required executable or binary is missing or not in PATH for runtime (${type}).`);
-      panelLog(id, "For Minecraft servers install a compatible Java runtime, e.g.:");
-      panelLog(id, "  sudo apt update && sudo apt install -y openjdk-21-jre-headless");
+      if (type === "minecraft" || type === "forge" || type === "neoforge" || type === "quilt") {
+        const requiredJava = serverData.javaVersion
+          ? String(serverData.javaVersion)
+          : getRequiredJavaVersion(String(serverData.version || "latest"), type);
+        panelLog(id, `This server requires Java ${requiredJava} to run.`);
+        panelLog(id, "Java executable was not found. Recover by:");
+        panelLog(id, "  1. Installing Java via the panel's Java Runtime section, or");
+        panelLog(id, `  2. Running: sudo apt update && sudo apt install -y openjdk-${requiredJava}-jre-headless`);
+        panelLog(id, "  3. Then restarting this server.");
+      } else if (type === "nodejs" || type === "node") {
+        panelLog(id, "Node.js executable was not found. Install Node.js and try again.");
+      } else if (type === "python" || type === "python3") {
+        panelLog(id, "Python executable was not found. Install Python and try again.");
+      }
+      panelLog(id, "------------------------");
+    }
+    if (err.message.includes("EACCES")) {
+      panelLog(id, "---- PERMISSION NOTICE ----");
+      panelLog(id, `The executable exists but cannot be executed (permission denied).`);
+      panelLog(id, "Fix with: chmod +x <java-path>");
       panelLog(id, "------------------------");
     }
     state.process = null;

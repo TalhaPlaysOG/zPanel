@@ -243,26 +243,57 @@ install_pm2() {
 # ─────────────────────────────────────────────
 #  AUTOMATIC JAVA 25 INSTALLATION (No prompts)
 # ─────────────────────────────────────────────
-install_java_25_auto() {
-    log_step "Checking Java runtime for Minecraft servers (Target: Java 25)..."
+install_java_runtimes() {
+    log_step "Checking Java runtimes for Minecraft servers..."
 
-    local NEED_JAVA=0
-    local CURRENT_JAVA_VER=0
+    # Track which Java versions are available
+    JAVA_21_AVAILABLE=0
+    JAVA_25_AVAILABLE=0
+    JAVA_ANY_AVAILABLE=0
 
-    if command -v java &>/dev/null; then
-        CURRENT_JAVA_VER=$(java -version 2>&1 | head -1 | awk -F '"' '{print $2}' | cut -d'.' -f1)
-        if [ "$CURRENT_JAVA_VER" -ge 25 ]; then
-            log_success "Java 25 is already installed: $(java -version 2>&1 | head -1)"
-            return 0
+    # Helper: check if a specific Java major version is available
+    check_java_version() {
+        local target_ver="$1"
+        if command -v java &>/dev/null; then
+            local cur_ver
+            cur_ver=$(java -version 2>&1 | head -1 | awk -F '"' '{print $2}' | cut -d'.' -f1)
+            # Handle "1.8.0" style (Java 8 -> "1")
+            if [ "$cur_ver" = "1" ]; then cur_ver="8"; fi
+            if [ "$cur_ver" -ge "$target_ver" ] 2>/dev/null; then
+                return 0
+            fi
         fi
-        log_info "Found Java version $CURRENT_JAVA_VER. Upgrading to Java 25 automatically..."
-        NEED_JAVA=1
+        # Check common install directories
+        local jvm_dir
+        for jvm_dir in /usr/lib/jvm/jdk-${target_ver}* /usr/lib/jvm/java-${target_ver}-openjdk* /usr/local/lib/jvm/jdk-${target_ver}* /opt/java/openjdk-${target_ver}*; do
+            if [ -x "$jvm_dir/bin/java" ] 2>/dev/null; then
+                return 0
+            fi
+        done
+        return 1
+    }
+
+    # Check existing Java
+    if check_java_version 25; then
+        JAVA_25_AVAILABLE=1
+        JAVA_ANY_AVAILABLE=1
+        log_success "Java 25 is already installed: $(java -version 2>&1 | head -1 2>/dev/null || /usr/lib/jvm/jdk-25/bin/java -version 2>&1 | head -1)"
+    elif check_java_version 21; then
+        JAVA_21_AVAILABLE=1
+        JAVA_ANY_AVAILABLE=1
+        log_success "Java 21 is already installed: $(java -version 2>&1 | head -1 2>/dev/null || /usr/lib/jvm/jdk-21/bin/java -version 2>&1 | head -1)"
+    elif command -v java &>/dev/null; then
+        local cur_ver
+        cur_ver=$(java -version 2>&1 | head -1 | awk -F '"' '{print $2}' | cut -d'.' -f1)
+        if [ "$cur_ver" = "1" ]; then cur_ver="8"; fi
+        log_warning "Found Java $cur_ver but Minecraft 1.20.5+ requires Java 21 or higher."
     else
-        NEED_JAVA=1
+        log_info "No Java runtime found. Will install Java 21 and Java 25."
     fi
 
-    if [ "$NEED_JAVA" -eq 1 ]; then
-        log_info "Installing OpenJDK 25..."
+    # Install Java 21 if not available
+    if [ "$JAVA_21_AVAILABLE" -eq 0 ]; then
+        log_info "Installing Java 21 (required for Minecraft 1.20.5+)..."
         ARCH=$(uname -m)
         case "$ARCH" in
             x86_64)  JAVA_ARCH="x64" ;;
@@ -270,50 +301,114 @@ install_java_25_auto() {
             *)       JAVA_ARCH="x64" ;;
         esac
 
-        # Download official OpenJDK 25 build
-        JAVA_URL="https://download.java.net/java/early_access/jdk25/11/GPL/openjdk-25-ea+11_linux-${JAVA_ARCH}_bin.tar.gz"
-        JAVA_DIR="/usr/lib/jvm/jdk-25"
-
-        $SUDO mkdir -p /usr/lib/jvm
-        log_info "Downloading Java 25 ($JAVA_ARCH)..."
-        curl -fsSL "$JAVA_URL" -o /tmp/jdk25.tar.gz 2>/dev/null || true
-
-        if [ -f "/tmp/jdk25.tar.gz" ] && [ -s "/tmp/jdk25.tar.gz" ]; then
-            $SUDO rm -rf "$JAVA_DIR"
-            $SUDO mkdir -p "$JAVA_DIR"
-            $SUDO tar -xzf /tmp/jdk25.tar.gz -C "$JAVA_DIR" --strip-components=1 2>/dev/null || true
-            rm -f /tmp/jdk25.tar.gz
-
-            if [ -x "$JAVA_DIR/bin/java" ]; then
-                $SUDO update-alternatives --install /usr/bin/java java "$JAVA_DIR/bin/java" 2000 2>/dev/null || true
-                $SUDO update-alternatives --set java "$JAVA_DIR/bin/java" 2>/dev/null || true
-                $SUDO ln -sf "$JAVA_DIR/bin/java" /usr/local/bin/java 2>/dev/null || true
-
-                # Configure environment
-                if ! grep -q "JAVA_HOME=$JAVA_DIR" /etc/environment 2>/dev/null; then
-                    echo "JAVA_HOME=$JAVA_DIR" | $SUDO tee -a /etc/environment >/dev/null
-                fi
-                export JAVA_HOME="$JAVA_DIR"
-                export PATH="$JAVA_DIR/bin:$PATH"
-            fi
+        # Try Adoptium Eclipse Temurin for Java 21 (reputable, maintained)
+        local TEMURIN_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.5_11.tar.gz"
+        if [ "$JAVA_ARCH" = "x64" ]; then
+            TEMURIN_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_x64_linux_hotspot_21.0.5_11.tar.gz"
         fi
 
-        # Fallback to system package manager if archive was unavailable
-        if ! command -v java &>/dev/null || [ "$(java -version 2>&1 | head -1 | awk -F '"' '{print $2}' | cut -d'.' -f1)" -lt 21 ]; then
-            log_warning "OpenJDK 25 direct download fallback: installing package manager Java..."
+        local JAVA21_DIR="/usr/lib/jvm/jdk-21"
+        $SUDO mkdir -p /usr/lib/jvm
+        log_info "Downloading Java 21 ($JAVA_ARCH) from Adoptium..."
+        if curl -fsSL "$TEMURIN_URL" -o /tmp/jdk21.tar.gz 2>/dev/null && [ -f "/tmp/jdk21.tar.gz" ] && [ -s "/tmp/jdk21.tar.gz" ]; then
+            $SUDO rm -rf "$JAVA21_DIR"
+            $SUDO mkdir -p "$JAVA21_DIR"
+            $SUDO tar -xzf /tmp/jdk21.tar.gz -C "$JAVA21_DIR" --strip-components=1 2>/dev/null || true
+            rm -f /tmp/jdk21.tar.gz
+        fi
+
+        if [ -x "$JAVA21_DIR/bin/java" ] 2>/dev/null; then
+            $SUDO update-alternatives --install /usr/bin/java java "$JAVA21_DIR/bin/java" 1500 2>/dev/null || true
+            $SUDO ln -sf "$JAVA21_DIR/bin/java" /usr/local/bin/java 2>/dev/null || true
+            if ! grep -q "JAVA_HOME=$JAVA21_DIR" /etc/environment 2>/dev/null; then
+                echo "JAVA_HOME=$JAVA21_DIR" | $SUDO tee -a /etc/environment >/dev/null
+            fi
+            JAVA_21_AVAILABLE=1
+            JAVA_ANY_AVAILABLE=1
+            log_success "Java 21 installed: $($JAVA21_DIR/bin/java -version 2>&1 | head -1)"
+        else
+            # Fallback to package manager
+            log_info "Direct download failed; trying package manager for Java 21..."
             if [ "$PKG_MGR" = "apt" ]; then
                 $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jre-headless 2>/dev/null || true
             elif [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
                 $SUDO $PKG_MGR install -y java-21-openjdk-headless 2>/dev/null || true
             fi
+            if check_java_version 21; then
+                JAVA_21_AVAILABLE=1
+                JAVA_ANY_AVAILABLE=1
+                log_success "Java 21 installed via package manager."
+            else
+                log_warning "Java 21 installation failed. Minecraft 1.20.5+ servers will not start until Java is installed."
+            fi
         fi
     fi
 
-    if command -v java &>/dev/null; then
-        INSTALLED_VER=$(java -version 2>&1 | head -1)
-        log_success "Java runtime active: $INSTALLED_VER"
+    # Install Java 25 if not available (for Minecraft 1.22+)
+    if [ "$JAVA_25_AVAILABLE" -eq 0 ]; then
+        log_info "Installing Java 25 (required for Minecraft 1.22+)..."
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            x86_64)  JAVA_ARCH="x64" ;;
+            aarch64) JAVA_ARCH="aarch64" ;;
+            *)       JAVA_ARCH="x64" ;;
+        esac
+
+        local JAVA25_DIR="/usr/lib/jvm/jdk-25"
+        $SUDO mkdir -p /usr/lib/jvm
+        log_info "Downloading Java 25 ($JAVA_ARCH) from Java.net early access..."
+        local JAVA25_URL="https://download.java.net/java/early_access/jdk25/11/GPL/openjdk-25-ea+11_linux-${JAVA_ARCH}_bin.tar.gz"
+        if curl -fsSL "$JAVA25_URL" -o /tmp/jdk25.tar.gz 2>/dev/null && [ -f "/tmp/jdk25.tar.gz" ] && [ -s "/tmp/jdk25.tar.gz" ]; then
+            $SUDO rm -rf "$JAVA25_DIR"
+            $SUDO mkdir -p "$JAVA25_DIR"
+            $SUDO tar -xzf /tmp/jdk25.tar.gz -C "$JAVA25_DIR" --strip-components=1 2>/dev/null || true
+            rm -f /tmp/jdk25.tar.gz
+        fi
+
+        if [ -x "$JAVA25_DIR/bin/java" ] 2>/dev/null; then
+            $SUDO update-alternatives --install /usr/bin/java java "$JAVA25_DIR/bin/java" 2000 2>/dev/null || true
+            $SUDO ln -sf "$JAVA25_DIR/bin/java" /usr/local/bin/java 2>/dev/null || true
+            if ! grep -q "JAVA_HOME=$JAVA25_DIR" /etc/environment 2>/dev/null; then
+                echo "JAVA_HOME=$JAVA25_DIR" | $SUDO tee -a /etc/environment >/dev/null
+            fi
+            JAVA_25_AVAILABLE=1
+            JAVA_ANY_AVAILABLE=1
+            log_success "Java 25 installed: $($JAVA25_DIR/bin/java -version 2>&1 | head -1)"
+        else
+            log_warning "Java 25 direct download failed. Java 25 is optional (only needed for Minecraft 1.22+). Java 21 remains available for Minecraft 1.20.5-1.21."
+        fi
+    fi
+
+    # Final status
+    if [ "$JAVA_ANY_AVAILABLE" -eq 1 ]; then
+        log_success "Java runtime(s) available for Minecraft servers."
     else
-        log_warning "Java runtime could not be installed automatically. Local Minecraft servers may require manual Java installation."
+        log_warning "No Java runtime could be installed automatically. Panel features will work, but local Minecraft servers cannot start until Java is installed manually."
+        log_info "Run: sudo apt update && sudo apt install -y openjdk-21-jre-headless  (or use the panel's Java Runtime section after install)"
+    fi
+}
+
+setup_java_env() {
+    local env_file="$1"
+    if [ -z "$env_file" ]; then
+        env_file="${TARGET_DIR:-$(pwd)}/.env"
+    fi
+
+    local java_path=""
+    if command -v java &>/dev/null; then
+        java_path=$(command -v java)
+    elif [ -x /usr/lib/jvm/jdk-21/bin/java ]; then
+        java_path="/usr/lib/jvm/jdk-21/bin/java"
+    elif [ -x /usr/lib/jvm/jdk-25/bin/java ]; then
+        java_path="/usr/lib/jvm/jdk-25/bin/java"
+    fi
+
+    if [ -n "$java_path" ] && [ -f "$env_file" ]; then
+        if ! grep -q "^JAVA_BIN=" "$env_file"; then
+            echo "JAVA_BIN=$java_path" >> "$env_file"
+        else
+            sed -i "s|^JAVA_BIN=.*|JAVA_BIN=$java_path|" "$env_file"
+        fi
     fi
 }
 
@@ -361,13 +456,8 @@ VITE_ENABLE_DEVELOPER_PANEL=false
 ENVEOF
     fi
 
-    # Record Java path if present
-    if command -v java &>/dev/null; then
-        JAVA_PATH=$(which java)
-        if ! grep -q "^JAVA_BIN=" "$env_file"; then
-            echo "JAVA_BIN=$JAVA_PATH" >> "$env_file"
-        fi
-    fi
+    # Record Java path in .env
+    setup_java_env "$env_file"
 
     chmod 600 "$env_file" 2>/dev/null || true
     log_success ".env configured (Port 6767)."
@@ -405,7 +495,7 @@ install_zpanel() {
     install_system_packages
     install_nodejs
     install_pm2
-    install_java_25_auto
+    install_java_runtimes
 
     # Determine installation directory
     TARGET_DIR="$DEFAULT_INSTALL_DIR"

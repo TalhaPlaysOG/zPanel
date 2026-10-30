@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { open as openFile } from "fs/promises";
 import axios from "axios";
+import { resolveJavaBinary } from "./java.js";
 
 /**
  * Server JAR downloader.
@@ -621,7 +622,12 @@ export const downloadJar = async (
       await validateDownloadedFile(tempPath, candidate, onProgress);
 
       if (candidate.forgeInstaller) {
-        const javaBin = process.env.JAVA_BIN || "java";
+        const javaBin = await resolveJavaBinary();
+        if (!javaBin) {
+          throw new Error(
+            "No compatible Java runtime found. Install Java 21 or Java 25 to run the Forge installer."
+          );
+        }
         await runForgeInstaller(tempPath, serverDir, javaBin, onProgress);
         const argsFile = await findForgeArgsFile(serverDir);
         if (!argsFile) {
