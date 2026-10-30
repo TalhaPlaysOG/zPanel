@@ -1118,35 +1118,94 @@ restart_zpanel() {
 }
 
 # ─────────────────────────────────────────────
-#  [6] UNINSTALL zPanel
+#  [6] DELETE zPanel (Complete Uninstall)
 # ─────────────────────────────────────────────
-uninstall_zpanel() {
+delete_panel() {
     print_banner
-    echo -e "  ${BOLD}${RED}UNINSTALL zPanel${NC}\n"
+    echo -e "  ${BOLD}${RED}DELETE zPanel${NC}\n"
     log_divider
 
     PANEL_DIR=$(find_panel_directory)
     if [ -z "$PANEL_DIR" ]; then
-        log_error "zPanel installation was not found. Nothing to uninstall."
+        log_error "zPanel installation was not found. Nothing to delete."
         return 1
     fi
 
-    log_warning "This will permanently remove zPanel from: ${BOLD}$PANEL_DIR${NC}"
+    # Verify the directory is a genuine zPanel installation (safety check)
+    if [ ! -f "$PANEL_DIR/package.json" ]; then
+        log_error "Cannot verify zPanel installation at $PANEL_DIR. Refusing to delete unverified path."
+        return 1
+    fi
+
+    # Collect zPanel-owned artifacts that are safe to remove
+    PANEL_DB_FILES=""
+    if [ -d "$PANEL_DIR/.data" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/.data"; fi
+    for db in "$PANEL_DIR"/*.db "$PANEL_DIR"/*.sqlite "$PANEL_DIR"/*.sqlite3 "$PANEL_DIR/database.db" "$PANEL_DIR/panel.db"; do
+        [ -f "$db" ] && PANEL_DB_FILES="$PANEL_DB_FILES $db"
+    done
+    if [ -d "$PANEL_DIR/database" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/database"; fi
+
+    # Detect zPanel-specific systemd service (not cloudflared)
+    PANEL_SYSTEMD_SVC=""
+    if systemctl list-unit-files 2>/dev/null | grep -qE "^zpanel\.service" || [ -f /etc/systemd/system/zpanel.service ]; then
+        PANEL_SYSTEMD_SVC="zpanel"
+    fi
+
+    # Detect reverse-proxy configs that reference only this panel port/dir
+    PANEL_PROXY_CONF=""
+    for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* /etc/apache2/sites-enabled/* /etc/httpd/conf.d/*; do
+        [ -f "$conf" ] || continue
+        if grep -qE "zpanel|6767|$PANEL_DIR" "$conf" 2>/dev/null; then
+            PANEL_PROXY_CONF="$PANEL_PROXY_CONF $conf"
+        fi
+    done
+
+    log_warning "This will permanently delete zPanel from: ${BOLD}$PANEL_DIR${NC}"
     echo ""
     echo -e "  ${RED}${BOLD}⚠  WARNING: This action is irreversible!${NC}"
-    echo -e "  ${RED}All panel data, server configurations, and user accounts will be deleted.${NC}"
+    echo -e "  ${RED}The following will be removed:${NC}"
+    echo -e "    • zPanel application files, frontend build, and backend files"
+    echo -e "    • PM2 process '${BOLD}$PM2_APP_NAME${NC}' and its startup entry"
+    echo -e "    • zPanel-specific systemd service (if present)"
+    echo -e "    • zPanel-specific reverse-proxy configuration (if present)"
+    echo -e "    • Temporary installation files"
+    echo ""
+    echo -e "  ${RED}The following will be preserved:${NC}"
+    echo -e "    • Cloudflare Tunnel (cloudflared, /etc/cloudflared/, cloudflared.service)"
+    echo -e "    • Shared Node.js, PM2, Docker, Java, and other system dependencies"
+    echo -e "    • Minecraft server files (unless separately confirmed as panel-owned)"
+    echo -e "    • Existing backups"
     echo ""
 
-    read -p "  Are you sure you want to uninstall zPanel? (y/N): " CONFIRM_1
+    read -p "  Are you sure you want to delete zPanel? (y/N): " CONFIRM_1
     if [[ ! "$CONFIRM_1" =~ ^[Yy]$ ]]; then
-        log_info "Uninstall cancelled."
+        log_info "Delete cancelled."
         return 0
     fi
 
-    read -p "  Type 'UNINSTALL' to confirm: " CONFIRM_2
-    if [ "$CONFIRM_2" != "UNINSTALL" ]; then
-        log_info "Uninstall cancelled."
+    read -p "  Type 'DELETE' to confirm: " CONFIRM_2
+    if [ "$CONFIRM_2" != "DELETE" ]; then
+        log_info "Delete cancelled."
         return 0
+    fi
+
+    # Separate confirmation for database / panel data
+    DELETE_DATA=0
+    if [ -n "$PANEL_DB_FILES" ]; then
+        echo ""
+        echo -e "  ${YELLOW}${BOLD}Panel data detected:${NC}$PANEL_DB_FILES"
+        echo -e "  ${RED}This includes the zPanel database and stored panel data.${NC}"
+        read -p "  Permanently delete panel database and data? (y/N): " CONFIRM_DATA
+        if [[ "$CONFIRM_DATA" =~ ^[Yy]$ ]]; then
+            read -p "  Type 'DELETE DATA' to confirm database removal: " CONFIRM_DATA_2
+            if [ "$CONFIRM_DATA_2" = "DELETE DATA" ]; then
+                DELETE_DATA=1
+            else
+                log_warning "Database deletion skipped (confirmation not matched)."
+            fi
+        else
+            log_warning "Database deletion skipped."
+        fi
     fi
 
     echo ""
@@ -1162,14 +1221,28 @@ uninstall_zpanel() {
         log_info "PM2 not found, skipping process cleanup."
     fi
 
-    # Remove the panel directory
-    log_step "Removing panel files from $PANEL_DIR..."
-    if [ -d "$PANEL_DIR" ]; then
-        $SUDO rm -rf "$PANEL_DIR"
-        log_success "Panel directory removed."
+    # Remove zPanel-specific systemd service (never touch cloudflared)
+    if [ -n "$PANEL_SYSTEMD_SVC" ]; then
+        log_step "Removing zPanel systemd service '$PANEL_SYSTEMD_SVC'..."
+        $SUDO systemctl stop "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
+        $SUDO systemctl disable "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
+        $SUDO rm -f "/etc/systemd/system/$PANEL_SYSTEMD_SVC.service" 2>/dev/null || true
+        $SUDO systemctl daemon-reload 2>/dev/null || true
+        log_success "zPanel systemd service removed."
     fi
 
-    # Optionally remove PM2 startup hook
+    # Remove zPanel-specific reverse-proxy configs (never touch unrelated)
+    if [ -n "$PANEL_PROXY_CONF" ]; then
+        log_step "Removing zPanel reverse-proxy configurations..."
+        for conf in $PANEL_PROXY_CONF; do
+            $SUDO rm -f "$conf" 2>/dev/null || true
+        done
+        if command -v nginx &>/dev/null; then $SUDO nginx -t 2>/dev/null && $SUDO systemctl reload nginx 2>/dev/null || true; fi
+        if command -v apache2ctl &>/dev/null; then $SUDO apache2ctl configtest 2>/dev/null && $SUDO systemctl reload apache2 2>/dev/null || true; fi
+        log_success "zPanel reverse-proxy configurations removed."
+    fi
+
+    # Remove PM2 startup hook (zPanel-only entry)
     if command -v pm2 &>/dev/null; then
         log_step "Removing PM2 startup hook..."
         pm2 unstartup 2>/dev/null || true
@@ -1177,17 +1250,54 @@ uninstall_zpanel() {
         log_success "PM2 startup hook removed."
     fi
 
-    # Ask about optional cleanup
-    echo ""
-    read -p "  Also remove PM2 globally? (y/N): " REMOVE_PM2
-    if [[ "$REMOVE_PM2" =~ ^[Yy]$ ]]; then
-        npm uninstall -g pm2 2>/dev/null || true
-        log_success "PM2 uninstalled globally."
+    # Delete panel application files (verified directory only)
+    log_step "Removing panel files from $PANEL_DIR..."
+    if [ -d "$PANEL_DIR" ]; then
+        $SUDO rm -rf "$PANEL_DIR"
+        log_success "Panel directory removed."
     fi
 
+    # Delete panel database and stored data (only if separately confirmed)
+    if [ "$DELETE_DATA" -eq 1 ]; then
+        log_step "Removing zPanel database and panel data..."
+        for item in $PANEL_DB_FILES; do
+            if [ -e "$item" ]; then
+                $SUDO rm -rf "$item" 2>/dev/null || true
+            fi
+        done
+        log_success "Panel database and data removed."
+    fi
+
+    # Clean up temporary installation files
+    log_step "Cleaning up temporary installation files..."
+    $SUDO rm -rf /tmp/zpanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz 2>/dev/null || true
+    log_success "Temporary files cleaned."
+
+    # Verify removal
     echo ""
+    log_step "Verifying deletion..."
+    VERIFY_OK=1
+    if [ -d "$PANEL_DIR" ]; then
+        log_error "Panel directory still exists at $PANEL_DIR"
+        VERIFY_OK=0
+    fi
+    if command -v pm2 &>/dev/null && pm2 list 2>/dev/null | grep -q "$PM2_APP_NAME"; then
+        log_error "PM2 process '$PM2_APP_NAME' still running."
+        VERIFY_OK=0
+    fi
+    if [ -n "$PANEL_SYSTEMD_SVC" ] && systemctl list-unit-files 2>/dev/null | grep -qE "^$PANEL_SYSTEMD_SVC\.service"; then
+        log_error "zPanel systemd service still present."
+        VERIFY_OK=0
+    fi
+
     log_divider
-    echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely uninstalled.${NC}"
+    if [ "$VERIFY_OK" -eq 1 ]; then
+        echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely deleted.${NC}"
+    else
+        echo -e "  ${YELLOW}${BOLD}⚠ zPanel deletion completed with warnings. Some items may remain.${NC}"
+    fi
+    echo ""
+    echo -e "  ${BOLD}Cloudflare Tunnel was NOT touched and remains operational.${NC}"
     echo ""
 }
 
@@ -1203,7 +1313,7 @@ while true; do
     echo -e "    ${BOLD}[3]${NC} Update zPanel"
     echo -e "    ${BOLD}[4]${NC} Create Admin User"
     echo -e "    ${BOLD}[5]${NC} Restart zPanel"
-    echo -e "    ${BOLD}${RED}[6]${NC} ${RED}Uninstall zPanel${NC}"
+    echo -e "    ${BOLD}${RED}[6]${NC} ${RED}Delete Panel${NC}"
     echo -e "    ${BOLD}[0]${NC} Exit"
     echo ""
     log_divider
@@ -1235,7 +1345,7 @@ while true; do
             read -p "  Press Enter to return to main menu..."
             ;;
         6)
-            uninstall_zpanel
+            delete_panel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
