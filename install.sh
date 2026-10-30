@@ -1125,33 +1125,57 @@ delete_panel() {
     echo -e "  ${BOLD}${RED}DELETE zPanel${NC}\n"
     log_divider
 
-    PANEL_DIR=$(find_panel_directory)
+    # ── Step 1: Detect the real zPanel installation directory ──
+    PANEL_DIR=""
+    if [ -f "./package.json" ] && [ -f "./server.ts" ]; then
+        PANEL_DIR="$(pwd)"
+    elif [ -d "$DEFAULT_INSTALL_DIR" ] && [ -f "$DEFAULT_INSTALL_DIR/package.json" ]; then
+        PANEL_DIR="$DEFAULT_INSTALL_DIR"
+    elif [ -d "$HOME/zpanel" ] && [ -f "$HOME/zpanel/package.json" ]; then
+        PANEL_DIR="$HOME/zpanel"
+    elif [ -d "./zPanel" ] && [ -f "./zPanel/package.json" ]; then
+        PANEL_DIR="$(pwd)/zPanel"
+    fi
+
     if [ -z "$PANEL_DIR" ]; then
         log_error "zPanel installation was not found. Nothing to delete."
         return 1
     fi
 
-    # Verify the directory is a genuine zPanel installation (safety check)
+    # ── Safety: verify this is genuinely a zPanel install ──
     if [ ! -f "$PANEL_DIR/package.json" ]; then
-        log_error "Cannot verify zPanel installation at $PANEL_DIR. Refusing to delete unverified path."
+        log_error "Cannot verify zPanel at $PANEL_DIR (no package.json). Refusing to delete an unverified path."
+        return 1
+    fi
+    IS_ZPANEL=0
+    if grep -qiE "zpanel" "$PANEL_DIR/package.json" 2>/dev/null; then
+        IS_ZPANEL=1
+    fi
+    if [ -f "$PANEL_DIR/server.ts" ] || [ -f "$PANEL_DIR/server.js" ]; then
+        IS_ZPANEL=1
+    fi
+    if [ "$IS_ZPANEL" -eq 0 ]; then
+        log_error "Path $PANEL_DIR does not appear to be a zPanel installation. Refusing to delete."
         return 1
     fi
 
-    # Collect zPanel-owned artifacts that are safe to remove
+    log_info "Verified zPanel installation at: ${BOLD}$PANEL_DIR${NC}"
+
+    # ── Collect zPanel-owned artifacts only (never broad /var/www/*) ──
     PANEL_DB_FILES=""
     if [ -d "$PANEL_DIR/.data" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/.data"; fi
+    if [ -d "$PANEL_DIR/database" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/database"; fi
     for db in "$PANEL_DIR"/*.db "$PANEL_DIR"/*.sqlite "$PANEL_DIR"/*.sqlite3 "$PANEL_DIR/database.db" "$PANEL_DIR/panel.db"; do
         [ -f "$db" ] && PANEL_DB_FILES="$PANEL_DB_FILES $db"
     done
-    if [ -d "$PANEL_DIR/database" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/database"; fi
 
-    # Detect zPanel-specific systemd service (not cloudflared)
     PANEL_SYSTEMD_SVC=""
-    if systemctl list-unit-files 2>/dev/null | grep -qE "^zpanel\.service" || [ -f /etc/systemd/system/zpanel.service ]; then
+    if [ -f /etc/systemd/system/zpanel.service ]; then
+        PANEL_SYSTEMD_SVC="zpanel"
+    elif systemctl list-unit-files 2>/dev/null | grep -qE "^zpanel\.service"; then
         PANEL_SYSTEMD_SVC="zpanel"
     fi
 
-    # Detect reverse-proxy configs that reference only this panel port/dir
     PANEL_PROXY_CONF=""
     for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* /etc/apache2/sites-enabled/* /etc/httpd/conf.d/*; do
         [ -f "$conf" ] || continue
@@ -1160,20 +1184,22 @@ delete_panel() {
         fi
     done
 
-    log_warning "This will permanently delete zPanel from: ${BOLD}$PANEL_DIR${NC}"
+    # ── Clear warning + explicit confirmation ──
     echo ""
-    echo -e "  ${RED}${BOLD}⚠  WARNING: This action is irreversible!${NC}"
-    echo -e "  ${RED}The following will be removed:${NC}"
-    echo -e "    • zPanel application files, frontend build, and backend files"
+    echo -e "  ${RED}${BOLD}⚠  WARNING: THIS ACTION IS IRREVERSIBLE${NC}"
+    echo -e "  ${RED}zPanel will be permanently deleted from:${NC} $PANEL_DIR"
+    echo ""
+    echo -e "  ${YELLOW}Will be REMOVED (zPanel only):${NC}"
+    echo -e "    • Application files, frontend build, backend files ($PANEL_DIR)"
     echo -e "    • PM2 process '${BOLD}$PM2_APP_NAME${NC}' and its startup entry"
-    echo -e "    • zPanel-specific systemd service (if present)"
-    echo -e "    • zPanel-specific reverse-proxy configuration (if present)"
+    echo -e "    • zPanel systemd service (if present)"
+    echo -e "    • zPanel reverse-proxy configs (if present)"
     echo -e "    • Temporary installation files"
     echo ""
-    echo -e "  ${RED}The following will be preserved:${NC}"
+    echo -e "  ${GREEN}Will be PRESERVED:${NC}"
     echo -e "    • Cloudflare Tunnel (cloudflared, /etc/cloudflared/, cloudflared.service)"
-    echo -e "    • Shared Node.js, PM2, Docker, Java, and other system dependencies"
-    echo -e "    • Minecraft server files (unless separately confirmed as panel-owned)"
+    echo -e "    • Shared Node.js, PM2, Docker, Java and other system dependencies"
+    echo -e "    • Minecraft server files (unless panel-owned and separately confirmed)"
     echo -e "    • Existing backups"
     echo ""
 
@@ -1189,29 +1215,29 @@ delete_panel() {
         return 0
     fi
 
-    # Separate confirmation for database / panel data
+    # ── Separate confirmation for database / panel data ──
     DELETE_DATA=0
     if [ -n "$PANEL_DB_FILES" ]; then
         echo ""
         echo -e "  ${YELLOW}${BOLD}Panel data detected:${NC}$PANEL_DB_FILES"
         echo -e "  ${RED}This includes the zPanel database and stored panel data.${NC}"
         read -p "  Permanently delete panel database and data? (y/N): " CONFIRM_DATA
-        if [[ "$CONFIRM_DATA" =~ ^[Yy]$ ]]; then
+        if [[ ! "$CONFIRM_DATA" =~ ^[Yy]$ ]]; then
+            log_warning "Database deletion skipped."
+        else
             read -p "  Type 'DELETE DATA' to confirm database removal: " CONFIRM_DATA_2
             if [ "$CONFIRM_DATA_2" = "DELETE DATA" ]; then
                 DELETE_DATA=1
             else
                 log_warning "Database deletion skipped (confirmation not matched)."
             fi
-        else
-            log_warning "Database deletion skipped."
         fi
     fi
 
     echo ""
     log_step "Stopping zPanel services..."
 
-    # Stop and remove PM2 process
+    # Stop and remove PM2 process (zpanel only)
     if command -v pm2 &>/dev/null; then
         pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
         pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
@@ -1221,7 +1247,7 @@ delete_panel() {
         log_info "PM2 not found, skipping process cleanup."
     fi
 
-    # Remove zPanel-specific systemd service (never touch cloudflared)
+    # Remove zPanel-specific systemd service (never touch cloudflared.service)
     if [ -n "$PANEL_SYSTEMD_SVC" ]; then
         log_step "Removing zPanel systemd service '$PANEL_SYSTEMD_SVC'..."
         $SUDO systemctl stop "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
@@ -1242,7 +1268,7 @@ delete_panel() {
         log_success "zPanel reverse-proxy configurations removed."
     fi
 
-    # Remove PM2 startup hook (zPanel-only entry)
+    # Remove PM2 startup hook
     if command -v pm2 &>/dev/null; then
         log_step "Removing PM2 startup hook..."
         pm2 unstartup 2>/dev/null || true
@@ -1257,7 +1283,7 @@ delete_panel() {
         log_success "Panel directory removed."
     fi
 
-    # Delete panel database and stored data (only if separately confirmed)
+    # Delete panel database and data (only if separately confirmed)
     if [ "$DELETE_DATA" -eq 1 ]; then
         log_step "Removing zPanel database and panel data..."
         for item in $PANEL_DB_FILES; do
@@ -1273,7 +1299,7 @@ delete_panel() {
     $SUDO rm -rf /tmp/zpanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz 2>/dev/null || true
     log_success "Temporary files cleaned."
 
-    # Verify removal
+    # ── Verify removal ──
     echo ""
     log_step "Verifying deletion..."
     VERIFY_OK=1
