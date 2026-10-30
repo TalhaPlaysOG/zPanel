@@ -14,6 +14,20 @@ fi
 set +e
 
 # ─────────────────────────────────────────────
+#  ERROR HANDLING & CLEANUP TRAP
+# ─────────────────────────────────────────────
+cleanup_on_exit() {
+    local exit_code=$?
+    # Clean up any temporary node installation directory
+    rm -rf /tmp/zpanel_node_install 2>/dev/null || true
+    if [ "$exit_code" -ne 0 ]; then
+        log_error "Installer exited with code $exit_code. Some operations may not have completed."
+    fi
+    exit "$exit_code"
+}
+trap cleanup_on_exit EXIT
+
+# ─────────────────────────────────────────────
 #  CONSTANTS & PATHS
 # ─────────────────────────────────────────────
 REPO_URL="https://github.com/TalhaPlaysOG/zPanel.git"
@@ -162,65 +176,169 @@ install_system_packages() {
 }
 
 # ─────────────────────────────────────────────
-#  INSTALL NODE.JS >= 22 LTS
+#  INSTALL NODE.JS >= 22 LTS (Robust)
 # ─────────────────────────────────────────────
 install_nodejs() {
     log_step "Verifying Node.js runtime..."
     local NEED_NODE=0
+    local NODE_INSTALL_DIR="/tmp/zpanel_node_install"
+    local NODE_ARCHIVE=""
+    local NODE_VER_RAW=""
+    local NODE_MAJOR=0
+    local NODE_MINOR=0
 
-    if ! command -v node &>/dev/null; then
-        NEED_NODE=1
-    else
+    # Check existing Node.js
+    if command -v node &>/dev/null; then
         NODE_VER_RAW=$(node -v 2>/dev/null | tr -d 'v')
         NODE_MAJOR=$(echo "$NODE_VER_RAW" | cut -d'.' -f1)
         NODE_MINOR=$(echo "$NODE_VER_RAW" | cut -d'.' -f2)
-
-        if [ "$NODE_MAJOR" -lt 22 ]; then
-            if [ "$NODE_MAJOR" -lt 20 ] || [ "${NODE_MINOR:-0}" -lt 19 ]; then
-                NEED_NODE=1
-                log_info "Node.js $NODE_VER_RAW is below requirement. Upgrading to Node.js 22.x LTS..."
-            fi
+        if [ "$NODE_MAJOR" -ge 22 ]; then
+            log_success "Node.js $NODE_VER_RAW already installed (meets >= 22 requirement)."
+            return 0
+        elif [ "$NODE_MAJOR" -ge 20 ] && [ "${NODE_MINOR:-0}" -ge 19 ]; then
+            log_warning "Node.js $NODE_VER_RAW installed but below recommended 22.x LTS. Proceeding anyway."
+            return 0
+        else
+            log_info "Node.js $NODE_VER_RAW is below requirement. Upgrading to Node.js 22.x LTS..."
+            NEED_NODE=1
         fi
+    else
+        NEED_NODE=1
     fi
 
-    if [ "$NEED_NODE" -eq 1 ]; then
-        log_info "Installing Node.js 22.x LTS via NodeSource..."
+    if [ "$NEED_NODE" -eq 0 ]; then
+        return 0
+    fi
+
+    # Check disk space (need at least 500MB in /tmp and /usr/local)
+    local AVAIL_KB
+    AVAIL_KB=$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "$AVAIL_KB" ] && [ "$AVAIL_KB" -lt 512000 ]; then
+        log_error "Insufficient disk space in /tmp (need at least 500MB, have ${AVAIL_KB}KB)."
+        return 1
+    fi
+
+    # Create temp directory for download
+    rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+    mkdir -p "$NODE_INSTALL_DIR" || {
+        log_error "Failed to create temporary directory $NODE_INSTALL_DIR."
+        return 1
+    }
+
+    # Detect architecture
+    local ARCH
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)  NODE_ARCH="x64" ;;
+        aarch64) NODE_ARCH="arm64" ;;
+        armv7l)  NODE_ARCH="armv7l" ;;
+        *)       NODE_ARCH="x64" ;;
+    esac
+
+    NODE_PKG="node-v22.14.0-linux-${NODE_ARCH}"
+    NODE_ARCHIVE="$NODE_INSTALL_DIR/${NODE_PKG}.tar.xz"
+    local NODE_URL="https://nodejs.org/dist/v22.14.0/${NODE_PKG}.tar.xz"
+
+    log_info "Downloading Node.js 22.x LTS ($NODE_ARCH)..."
+    if ! curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 5 \
+        -o "$NODE_ARCHIVE" "$NODE_URL"; then
+        log_error "Failed to download Node.js archive from $NODE_URL."
+        log_info "Trying NodeSource repository method as fallback..."
+        # Fallback to NodeSource
         if [ "$PKG_MGR" = "apt" ]; then
-            curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - 2>/dev/null || true
-            $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs 2>/dev/null || true
-        elif [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
-            curl -fsSL https://rpm.nodesource.com/setup_22.x | $SUDO bash - 2>/dev/null || true
-            $SUDO $PKG_MGR install -y nodejs 2>/dev/null || true
-        fi
-
-        CURRENT_MAJOR=0
-        if command -v node &>/dev/null; then
-            CURRENT_MAJOR=$(node -v 2>/dev/null | cut -d'.' -f1 | tr -d 'v')
-        fi
-
-        if [ "$CURRENT_MAJOR" -lt 20 ]; then
-            log_info "Downloading official Node.js 22 binary directly..."
-            ARCH=$(uname -m)
-            case "$ARCH" in
-                x86_64)  NODE_ARCH="x64" ;;
-                aarch64) NODE_ARCH="arm64" ;;
-                armv7l)  NODE_ARCH="armv7l" ;;
-                *)       NODE_ARCH="x64" ;;
-            esac
-            NODE_PKG="node-v22.14.0-linux-${NODE_ARCH}"
-            curl -fsSL "https://nodejs.org/dist/v22.14.0/${NODE_PKG}.tar.xz" -o /tmp/node22.tar.xz 2>/dev/null || true
-            if [ -f "/tmp/node22.tar.xz" ]; then
-                $SUDO tar -xJf /tmp/node22.tar.xz -C /usr/local --strip-components=1 2>/dev/null || true
-                rm -f /tmp/node22.tar.xz
+            if ! curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - 2>/dev/null; then
+                log_error "NodeSource setup failed."
+                rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+                return 1
             fi
+            if ! $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs 2>/dev/null; then
+                log_error "apt-get install nodejs failed."
+                rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+                return 1
+            fi
+        elif [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
+            if ! curl -fsSL https://rpm.nodesource.com/setup_22.x | $SUDO bash - 2>/dev/null; then
+                log_error "NodeSource setup failed."
+                rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+                return 1
+            fi
+            if ! $SUDO $PKG_MGR install -y nodejs 2>/dev/null; then
+                log_error "$PKG_MGR install nodejs failed."
+                rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+                return 1
+            fi
+        else
+            log_error "Unsupported package manager for Node.js fallback."
+            rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+            return 1
+        fi
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        if command -v node &>/dev/null && command -v npm &>/dev/null; then
+            log_success "Node.js $(node -v) & npm v$(npm -v) installed via package manager."
+            return 0
+        else
+            log_error "Node.js installation failed. Cannot continue."
+            return 1
         fi
     fi
+
+    # Validate downloaded archive
+    if [ ! -f "$NODE_ARCHIVE" ] || [ ! -s "$NODE_ARCHIVE" ]; then
+        log_error "Node.js archive is empty or missing after download."
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        return 1
+    fi
+
+    # Verify it's a valid xz archive
+    if ! file "$NODE_ARCHIVE" | grep -qi "xz"; then
+        log_error "Downloaded Node.js archive is not a valid xz file."
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        return 1
+    fi
+
+    log_info "Extracting Node.js archive..."
+    if ! tar -xJf "$NODE_ARCHIVE" -C "$NODE_INSTALL_DIR" 2>/dev/null; then
+        log_error "Failed to extract Node.js archive."
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        return 1
+    fi
+
+    # Find the extracted directory
+    local EXTRACTED_DIR
+    EXTRACTED_DIR=$(find "$NODE_INSTALL_DIR" -maxdepth 1 -type d -name "node-*" 2>/dev/null | head -1)
+    if [ -z "$EXTRACTED_DIR" ] || [ ! -x "$EXTRACTED_DIR/bin/node" ]; then
+        log_error "Node.js binary not found in extracted archive."
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        return 1
+    fi
+
+    log_info "Installing Node.js to /usr/local..."
+    if ! $SUDO cp -r "$EXTRACTED_DIR"/* /usr/local/ 2>/dev/null; then
+        log_error "Failed to copy Node.js files to /usr/local."
+        rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+        return 1
+    fi
+
+    # Verify installation
+    if ! command -v node &>/dev/null; then
+        # Try direct path
+        if [ -x /usr/local/bin/node ]; then
+            export PATH="/usr/local/bin:$PATH"
+        else
+            log_error "Node.js binary not found after installation."
+            rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
+            return 1
+        fi
+    fi
+
+    # Clean up temp directory
+    rm -rf "$NODE_INSTALL_DIR" 2>/dev/null || true
 
     if command -v node &>/dev/null && command -v npm &>/dev/null; then
         log_success "Node.js $(node -v) & npm v$(npm -v) confirmed."
     else
         log_error "Node.js installation failed. Cannot continue."
-        exit 1
+        return 1
     fi
 }
 
@@ -485,8 +603,19 @@ check_panel_health() {
 #  [1] INSTALL zPanel (Node.js + PM2)
 # ─────────────────────────────────────────────
 install_zpanel() {
+    local INSTALL_MODE="${1:-nodejs}"
     print_banner
-    echo -e "  ${BOLD}${CYAN}INSTALLATION — Node.js + PM2 [Recommended]${NC}\n"
+    case "$INSTALL_MODE" in
+        docker)
+            echo -e "  ${BOLD}${CYAN}INSTALLATION — Node.js + Docker Support${NC}\n"
+            ;;
+        dev)
+            echo -e "  ${BOLD}${CYAN}INSTALLATION — Development Mode${NC}\n"
+            ;;
+        *)
+            echo -e "  ${BOLD}${CYAN}INSTALLATION — Node.js + PM2 [Recommended]${NC}\n"
+            ;;
+    esac
     log_divider
 
     check_privileges
@@ -517,8 +646,41 @@ install_zpanel() {
 
     cd "$TARGET_DIR" || { log_error "Failed to enter directory $TARGET_DIR"; exit 1; }
 
-    # Setup environment without interactive questions
+    # Setup environment
     setup_application_env "$TARGET_DIR"
+
+    # Configure Docker support if requested
+    if [ "$INSTALL_MODE" = "docker" ]; then
+        log_step "Configuring Docker support..."
+        if command -v docker &>/dev/null; then
+            log_success "Docker is available."
+            if ! grep -q "^ENABLE_DOCKER=true" "$TARGET_DIR/.env" 2>/dev/null; then
+                echo "ENABLE_DOCKER=true" >> "$TARGET_DIR/.env"
+            fi
+        else
+            log_warning "Docker not installed. Installing Docker..."
+            if [ "$PKG_MGR" = "apt" ]; then
+                $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io 2>/dev/null || true
+            elif [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
+                $SUDO $PKG_MGR install -y docker 2>/dev/null || true
+            fi
+            if command -v docker &>/dev/null; then
+                $SUDO systemctl enable docker 2>/dev/null || true
+                $SUDO systemctl start docker 2>/dev/null || true
+                echo "ENABLE_DOCKER=true" >> "$TARGET_DIR/.env"
+                log_success "Docker installed and started."
+            else
+                log_warning "Docker installation failed. Continuing with local runtime only."
+            fi
+        fi
+    elif [ "$INSTALL_MODE" = "dev" ]; then
+        log_step "Configuring Development Mode..."
+        if ! grep -q "^VITE_ENABLE_DEVELOPER_PANEL=true" "$TARGET_DIR/.env" 2>/dev/null; then
+            echo "VITE_ENABLE_DEVELOPER_PANEL=true" >> "$TARGET_DIR/.env"
+        fi
+        echo "NODE_ENV=development" >> "$TARGET_DIR/.env"
+        log_success "Development mode configured."
+    fi
 
     # Write PM2 ecosystem file
     cat > "$TARGET_DIR/ecosystem.config.cjs" << 'ECOSYSTEM'
@@ -605,6 +767,20 @@ ECOSYSTEM
     printf  "  ║  %-20s : %-37s ║\n" "Auto Startup" "Enabled"
     echo "  ╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+}
+
+# ─────────────────────────────────────────────
+#  Install zPanel with Docker Support
+# ─────────────────────────────────────────────
+install_zpanel_docker() {
+    install_zpanel "docker"
+}
+
+# ─────────────────────────────────────────────
+#  Install zPanel Development Mode
+# ─────────────────────────────────────────────
+install_zpanel_dev() {
+    install_zpanel "dev"
 }
 
 # ─────────────────────────────────────────────
@@ -1099,6 +1275,7 @@ update_zpanel() {
     check_privileges
     check_network
 
+    # Detect current installation
     PANEL_DIR=$(find_panel_directory)
     if [ -z "$PANEL_DIR" ]; then
         log_error "No zPanel installation found. Please install zPanel first (Option 1)."
@@ -1107,49 +1284,106 @@ update_zpanel() {
 
     log_info "Detected installation: $PANEL_DIR"
 
-    # Backup production settings & data
+    # Detect current version
+    local CURRENT_VERSION="unknown"
+    if [ -f "$PANEL_DIR/package.json" ]; then
+        CURRENT_VERSION=$(grep -o '"version": *"[^"]*"' "$PANEL_DIR/package.json" 2>/dev/null | head -1 | cut -d'"' -f4)
+    fi
+    log_info "Current version: $CURRENT_VERSION"
+
+    # Create backup
+    local BACKUP_TIME
     BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
-    BACKUP_DIR="/tmp/zpanel_backup_${BACKUP_TIME}"
+    local BACKUP_DIR="/tmp/zpanel_backup_${BACKUP_TIME}"
     mkdir -p "$BACKUP_DIR"
 
-    log_step "Backing up configuration and database..."
+    log_step "Backing up configuration and data before update..."
     [ -f "$PANEL_DIR/.env" ] && cp "$PANEL_DIR/.env" "$BACKUP_DIR/.env"
     [ -d "$PANEL_DIR/.data" ] && cp -r "$PANEL_DIR/.data" "$BACKUP_DIR/.data"
+    [ -f "$PANEL_DIR/package.json" ] && cp "$PANEL_DIR/package.json" "$BACKUP_DIR/package.json"
+    [ -f "$PANEL_DIR/ecosystem.config.cjs" ] && cp "$PANEL_DIR/ecosystem.config.cjs" "$BACKUP_DIR/ecosystem.config.cjs"
+    # Backup server data
+    if [ -d "$PANEL_DIR/.data/servers" ]; then
+        cp -r "$PANEL_DIR/.data/servers" "$BACKUP_DIR/servers" 2>/dev/null || true
+    fi
     log_success "Backup saved to $BACKUP_DIR"
 
-    cd "$PANEL_DIR" || return 1
+    cd "$PANEL_DIR" || { log_error "Failed to enter directory $PANEL_DIR"; return 1; }
 
-    # Git pull
+    # Stop panel before update
+    log_step "Stopping zPanel before update..."
+    if command -v pm2 &>/dev/null; then
+        pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
+        pm2 save 2>/dev/null || true
+        log_success "zPanel stopped."
+    fi
+
+    # Fetch latest version
     log_step "Fetching latest version from repository..."
     git stash 2>/dev/null || true
     if ! git pull --ff-only; then
-        log_error "git pull failed. Restoring from backup."
+        log_error "git pull failed. Restoring from backup..."
+        # Rollback
+        [ -f "$BACKUP_DIR/.env" ] && cp "$BACKUP_DIR/.env" "$PANEL_DIR/.env"
+        [ -d "$BACKUP_DIR/.data" ] && cp -r "$BACKUP_DIR/.data" "$PANEL_DIR/"
+        [ -f "$BACKUP_DIR/package.json" ] && cp "$BACKUP_DIR/package.json" "$PANEL_DIR/package.json"
+        if command -v pm2 &>/dev/null; then
+            pm2 start "$PANEL_DIR/ecosystem.config.cjs" 2>/dev/null || true
+            pm2 save 2>/dev/null || true
+        fi
+        log_error "Update rolled back. Backup is at $BACKUP_DIR"
         return 1
     fi
 
-    # Restore .env and data
+    # Restore preserved files (never overwrite user config with defaults)
     [ -f "$BACKUP_DIR/.env" ] && cp "$BACKUP_DIR/.env" "$PANEL_DIR/.env"
     [ -d "$BACKUP_DIR/.data" ] && cp -r "$BACKUP_DIR/.data" "$PANEL_DIR/"
+    [ -d "$BACKUP_DIR/servers" ] && cp -r "$BACKUP_DIR/servers" "$PANEL_DIR/.data/servers" 2>/dev/null || true
 
-    # Install dependencies & rebuild
+    # Install dependencies and rebuild
     log_step "Updating dependencies and rebuilding..."
-    npm install || { log_error "npm install failed."; return 1; }
-    npm run build || { log_error "Build failed."; return 1; }
+    if ! npm install; then
+        log_error "npm install failed. Rolling back..."
+        rollback_update "$PANEL_DIR" "$BACKUP_DIR"
+        return 1
+    fi
+    if ! npm run build; then
+        log_error "Build failed. Rolling back..."
+        rollback_update "$PANEL_DIR" "$BACKUP_DIR"
+        return 1
+    fi
 
     # Restart PM2
     log_step "Restarting PM2 process..."
     if command -v pm2 &>/dev/null; then
-        pm2 restart "$PM2_APP_NAME" 2>/dev/null || pm2 restart all 2>/dev/null || true
+        pm2 restart "$PM2_APP_NAME" 2>/dev/null || pm2 start ecosystem.config.cjs 2>/dev/null || true
         pm2 save 2>/dev/null || true
     fi
 
     # Health check
+    log_step "Verifying panel is responding after update..."
     if check_panel_health "$PANEL_PORT"; then
         log_success "Update completed successfully! zPanel is active on port $PANEL_PORT."
         rm -rf "$BACKUP_DIR"
     else
-        log_warning "Update completed. Application may still be loading. Check: pm2 logs zpanel"
+        log_warning "Update completed but panel may still be loading. Check: pm2 logs zpanel"
+        log_info "Backup preserved at $BACKUP_DIR in case rollback is needed."
     fi
+}
+
+# Rollback helper for update failures
+rollback_update() {
+    local panel_dir="$1"
+    local backup_dir="$2"
+    log_step "Rolling back to previous version..."
+    [ -f "$backup_dir/.env" ] && cp "$backup_dir/.env" "$panel_dir/.env"
+    [ -d "$backup_dir/.data" ] && cp -r "$backup_dir/.data" "$panel_dir/"
+    if command -v pm2 &>/dev/null; then
+        pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+        pm2 start "$panel_dir/ecosystem.config.cjs" 2>/dev/null || true
+        pm2 save 2>/dev/null || true
+    fi
+    log_warning "Rollback complete. Backup is at $backup_dir"
 }
 
 # ─────────────────────────────────────────────
@@ -1208,11 +1442,11 @@ restart_zpanel() {
 }
 
 # ─────────────────────────────────────────────
-#  [6] DELETE zPanel (Complete Uninstall)
+#  [6] UNINSTALL zPanel (Complete Removal)
 # ─────────────────────────────────────────────
-delete_panel() {
+uninstall_zpanel() {
     print_banner
-    echo -e "  ${BOLD}${RED}DELETE zPanel${NC}\n"
+    echo -e "  ${BOLD}${RED}UNINSTALL zPanel${NC}\n"
     log_divider
 
     # ── Step 1: Detect the real zPanel installation directory ──
@@ -1228,7 +1462,7 @@ delete_panel() {
     fi
 
     if [ -z "$PANEL_DIR" ]; then
-        log_error "zPanel installation was not found. Nothing to delete."
+        log_error "zPanel installation was not found. Nothing to uninstall."
         return 1
     fi
 
@@ -1251,7 +1485,17 @@ delete_panel() {
 
     log_info "Verified zPanel installation at: ${BOLD}$PANEL_DIR${NC}"
 
-    # ── Collect zPanel-owned artifacts only (never broad /var/www/*) ──
+    # ── Step 2: Pre-uninstall inspection ──
+    echo ""
+    log_step "Inspecting zPanel installation..."
+
+    # Detect panel config files
+    PANEL_CONFIG_FILES=""
+    [ -f "$PANEL_DIR/.env" ] && PANEL_CONFIG_FILES="$PANEL_CONFIG_FILES $PANEL_DIR/.env"
+    [ -f "$PANEL_DIR/ecosystem.config.cjs" ] && PANEL_CONFIG_FILES="$PANEL_CONFIG_FILES $PANEL_DIR/ecosystem.config.cjs"
+    [ -f "$PANEL_DIR/package.json" ] && PANEL_CONFIG_FILES="$PANEL_CONFIG_FILES $PANEL_DIR/package.json"
+
+    # Detect zPanel-owned database files
     PANEL_DB_FILES=""
     if [ -d "$PANEL_DIR/.data" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/.data"; fi
     if [ -d "$PANEL_DIR/database" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/database"; fi
@@ -1259,6 +1503,7 @@ delete_panel() {
         [ -f "$db" ] && PANEL_DB_FILES="$PANEL_DB_FILES $db"
     done
 
+    # Detect zPanel-owned systemd services
     PANEL_SYSTEMD_SVC=""
     if [ -f /etc/systemd/system/zpanel.service ]; then
         PANEL_SYSTEMD_SVC="zpanel"
@@ -1266,6 +1511,15 @@ delete_panel() {
         PANEL_SYSTEMD_SVC="zpanel"
     fi
 
+    # Detect Nova tunnel service (panel-owned temporary tunnel)
+    NOVA_TUNNEL_SVC=""
+    if [ -f /etc/systemd/system/nova-tunnel.service ]; then
+        NOVA_TUNNEL_SVC="nova-tunnel"
+    elif systemctl list-unit-files 2>/dev/null | grep -qE "^nova-tunnel\.service"; then
+        NOVA_TUNNEL_SVC="nova-tunnel"
+    fi
+
+    # Detect zPanel-specific reverse-proxy configs
     PANEL_PROXY_CONF=""
     for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* /etc/apache2/sites-enabled/* /etc/httpd/conf.d/*; do
         [ -f "$conf" ] || continue
@@ -1274,70 +1528,154 @@ delete_panel() {
         fi
     done
 
-    # ── Clear warning + explicit confirmation ──
+    # Detect PM2 process
+    PANEL_PM2_RUNNING=0
+    if command -v pm2 &>/dev/null && pm2 list 2>/dev/null | grep -q "$PM2_APP_NAME"; then
+        PANEL_PM2_RUNNING=1
+    fi
+
+    # Detect Docker containers
+    DOCKER_CONTAINERS=""
+    if command -v docker &>/dev/null; then
+        for cname in zpanel zpanel-app zpanel-server; do
+            if $SUDO docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${cname}$"; then
+                DOCKER_CONTAINERS="$DOCKER_CONTAINERS $cname"
+            fi
+        done
+    fi
+
+    # Detect server data directories
+    SERVER_DATA_DIRS=""
+    if [ -d "$PANEL_DIR/.data/servers" ]; then
+        for sdir in "$PANEL_DIR/.data/servers"/*/; do
+            [ -d "$sdir" ] && SERVER_DATA_DIRS="$SERVER_DATA_DIRS $sdir"
+        done
+    fi
+
+    # Cloudflare Tunnel preservation check
+    CF_TUNNEL_PRESENT=0
+    if [ -d /etc/cloudflared ] || command -v cloudflared &>/dev/null || [ -f /etc/systemd/system/cloudflared.service ]; then
+        CF_TUNNEL_PRESENT=1
+    fi
+
+    # ── Display inspection summary ──
     echo ""
-    echo -e "  ${RED}${BOLD}⚠  WARNING: THIS ACTION IS IRREVERSIBLE${NC}"
-    echo -e "  ${RED}zPanel will be permanently deleted from:${NC} $PANEL_DIR"
-    echo ""
-    echo -e "  ${YELLOW}Will be REMOVED (zPanel only):${NC}"
-    echo -e "    • Application files, frontend build, backend files ($PANEL_DIR)"
-    echo -e "    • PM2 process '${BOLD}$PM2_APP_NAME${NC}' and its startup entry"
-    echo -e "    • zPanel systemd service (if present)"
-    echo -e "    • zPanel reverse-proxy configs (if present)"
-    echo -e "    • Temporary installation files"
-    echo ""
-    echo -e "  ${GREEN}Will be PRESERVED:${NC}"
-    echo -e "    • Cloudflare Tunnel (cloudflared, /etc/cloudflared/, cloudflared.service)"
-    echo -e "    • Shared Node.js, PM2, Docker, Java and other system dependencies"
-    echo -e "    • Minecraft server files (unless panel-owned and separately confirmed)"
-    echo -e "    • Existing backups"
+    echo -e "  ${CYAN}${BOLD}DETECTED RESOURCES:${NC}"
+    echo -e "    Installation directory: ${BOLD}$PANEL_DIR${NC}"
+    echo -e "    Panel config files: $([ -n "$PANEL_CONFIG_FILES" ] && echo "$PANEL_CONFIG_FILES" || echo "none found")"
+    echo -e "    Panel data/database: $([ -n "$PANEL_DB_FILES" ] && echo "$PANEL_DB_FILES" || echo "none found")"
+    echo -e "    PM2 process '$PM2_APP_NAME': $([ "$PANEL_PM2_RUNNING" = "1" ] && echo "running" || echo "not running")"
+    echo -e "    Systemd service: ${PANEL_SYSTEMD_SVC:-none}"
+    echo -e "    Nova tunnel service: ${NOVA_TUNNEL_SVC:-none}"
+    echo -e "    Nginx/Apache proxy configs: $([ -n "$PANEL_PROXY_CONF" ] && echo "$PANEL_PROXY_CONF" || echo "none found")"
+    echo -e "    Docker containers: ${DOCKER_CONTAINERS:-none}"
+    echo -e "    Server data directories: $([ -n "$SERVER_DATA_DIRS" ] && echo "$SERVER_DATA_DIRS" || echo "none found")"
+    echo -e "    Cloudflare Tunnel: $([ "$CF_TUNNEL_PRESENT" = "1" ] && echo "PRESENT - WILL BE PRESERVED" || echo "not detected")"
     echo ""
 
-    read -p "  Are you sure you want to delete zPanel? (y/N): " CONFIRM_1
-    if [[ ! "$CONFIRM_1" =~ ^[Yy]$ ]]; then
-        log_info "Delete cancelled."
+    # ── Uninstall mode selection ──
+    echo -e "  ${BOLD}${YELLOW}SELECT UNINSTALL SCOPE:${NC}"
+    echo -e "    ${BOLD}[1]${NC} Remove zPanel application only (safest - default)"
+    echo -e "    ${BOLD}[2]${NC} Remove zPanel application and its database"
+    echo -e "    ${BOLD}[3]${NC} Remove zPanel application, database, and panel-managed server data"
+    echo -e "    ${BOLD}[4]${NC} Cancel and return to installer menu"
+    echo ""
+    echo -ne "  Choose an option [1-4]: "
+    read -r UNINSTALL_MODE
+
+    case "$UNINSTALL_MODE" in
+        1) UNINSTALL_MODE="app_only" ;;
+        2) UNINSTALL_MODE="app_and_db" ;;
+        3) UNINSTALL_MODE="app_db_and_servers" ;;
+        4)
+            log_info "Uninstall cancelled."
+            return 0
+            ;;
+        *)
+            log_error "Invalid selection. Uninstall cancelled."
+            return 1
+            ;;
+    esac
+
+    # ── Step 3: Strong confirmation ──
+    echo ""
+    echo -e "  ${RED}${BOLD}⚠  FINAL CONFIRMATION REQUIRED${NC}"
+    echo -e "  ${RED}This action is IRREVERSIBLE.${NC}"
+    echo -e "  ${RED}Selected scope: $UNINSTALL_MODE${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Will be PRESERVED regardless of scope:${NC}"
+    echo -e "    • Cloudflare Tunnel (/etc/cloudflared/, cloudflared.service, credentials)"
+    echo -e "    • Shared Node.js, PM2, Docker, Java, and other system dependencies"
+    echo -e "    • Ubuntu, SSH, and network configuration"
+    echo -e "    • Unrelated applications, databases, and websites"
+    echo ""
+    echo -e "  Type exactly: ${BOLD}UNINSTALL ZPANEL${NC}"
+    echo -e "  (Any other input cancels the operation.)"
+    echo ""
+    echo -ne "  Confirmation phrase: "
+    read -r CONFIRM_PHRASE
+
+    if [ "$CONFIRM_PHRASE" != "UNINSTALL ZPANEL" ]; then
+        log_info "Confirmation phrase did not match. Uninstall cancelled."
         return 0
     fi
 
-    read -p "  Type 'DELETE' to confirm: " CONFIRM_2
-    if [ "$CONFIRM_2" != "DELETE" ]; then
-        log_info "Delete cancelled."
-        return 0
-    fi
-
-    # ── Separate confirmation for database / panel data ──
-    DELETE_DATA=0
-    if [ -n "$PANEL_DB_FILES" ]; then
-        echo ""
-        echo -e "  ${YELLOW}${BOLD}Panel data detected:${NC}$PANEL_DB_FILES"
-        echo -e "  ${RED}This includes the zPanel database and stored panel data.${NC}"
-        read -p "  Permanently delete panel database and data? (y/N): " CONFIRM_DATA
-        if [[ ! "$CONFIRM_DATA" =~ ^[Yy]$ ]]; then
-            log_warning "Database deletion skipped."
-        else
-            read -p "  Type 'DELETE DATA' to confirm database removal: " CONFIRM_DATA_2
-            if [ "$CONFIRM_DATA_2" = "DELETE DATA" ]; then
-                DELETE_DATA=1
-            else
-                log_warning "Database deletion skipped (confirmation not matched)."
+    # For modes that delete data, require a second confirmation
+    if [ "$UNINSTALL_MODE" = "app_and_db" ] || [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
+        if [ -n "$PANEL_DB_FILES" ]; then
+            echo ""
+            echo -e "  ${RED}${BOLD}⚠  DATABASE CONFIRMATION${NC}"
+            echo -e "  ${RED}The following database/data will be permanently destroyed:${NC}$PANEL_DB_FILES"
+            echo -e "  Type exactly: ${BOLD}DELETE DATABASE${NC}"
+            echo ""
+            echo -ne "  Database confirmation: "
+            read -r CONFIRM_DB
+            if [ "$CONFIRM_DB" != "DELETE DATABASE" ]; then
+                log_info "Database confirmation did not match. Proceeding with application-only removal."
+                UNINSTALL_MODE="app_only"
             fi
         fi
     fi
 
+    if [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
+        if [ -n "$SERVER_DATA_DIRS" ]; then
+            echo ""
+            echo -e "  ${RED}${BOLD}⚠  SERVER DATA CONFIRMATION${NC}"
+            echo -e "  ${RED}The following Minecraft server data will be permanently destroyed:${NC}$SERVER_DATA_DIRS"
+            echo -e "  This includes worlds, plugins, configurations, and backups."
+            echo -e "  Type exactly: ${BOLD}DELETE SERVER DATA${NC}"
+            echo ""
+            echo -ne "  Server data confirmation: "
+            read -r CONFIRM_SVR
+            if [ "$CONFIRM_SVR" != "DELETE SERVER DATA" ]; then
+                log_info "Server data confirmation did not match. Proceeding without server data removal."
+                if [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
+                    UNINSTALL_MODE="app_and_db"
+                fi
+            fi
+        fi
+    fi
+
+    # ── Step 4: Stop panel processes safely ──
     echo ""
     log_step "Stopping zPanel services..."
 
-    # Stop and remove PM2 process (zpanel only)
-    if command -v pm2 &>/dev/null; then
+    if [ "$PANEL_PM2_RUNNING" = "1" ] && command -v pm2 &>/dev/null; then
+        log_info "Stopping PM2 process '$PM2_APP_NAME'..."
         pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
-        pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+        sleep 2
+        # Verify stopped
+        if pm2 list 2>/dev/null | grep -q "$PM2_APP_NAME"; then
+            log_warning "PM2 process still running. Forcing termination..."
+            pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+        fi
         pm2 save 2>/dev/null || true
-        log_success "PM2 process '$PM2_APP_NAME' stopped and removed."
+        log_success "PM2 process '$PM2_APP_NAME' stopped."
     else
-        log_info "PM2 not found, skipping process cleanup."
+        log_info "PM2 process '$PM2_APP_NAME' not running or PM2 not found."
     fi
 
-    # Remove zPanel-specific systemd service (never touch cloudflared.service)
+    # ── Step 5: Remove zPanel-specific systemd service ──
     if [ -n "$PANEL_SYSTEMD_SVC" ]; then
         log_step "Removing zPanel systemd service '$PANEL_SYSTEMD_SVC'..."
         $SUDO systemctl stop "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
@@ -1347,18 +1685,43 @@ delete_panel() {
         log_success "zPanel systemd service removed."
     fi
 
-    # Remove zPanel-specific reverse-proxy configs (never touch unrelated)
+    # ── Step 6: Remove Nova tunnel service (only if confirmed panel-owned) ──
+    if [ -n "$NOVA_TUNNEL_SVC" ]; then
+        log_step "Removing Nova tunnel service '$NOVA_TUNNEL_SVC'..."
+        $SUDO systemctl stop "$NOVA_TUNNEL_SVC" 2>/dev/null || true
+        $SUDO systemctl disable "$NOVA_TUNNEL_SVC" 2>/dev/null || true
+        $SUDO rm -f "/etc/systemd/system/$NOVA_TUNNEL_SVC.service" 2>/dev/null || true
+        $SUDO systemctl daemon-reload 2>/dev/null || true
+        log_success "Nova tunnel service removed."
+    fi
+
+    # ── Step 7: Remove zPanel-specific reverse-proxy configs ──
     if [ -n "$PANEL_PROXY_CONF" ]; then
         log_step "Removing zPanel reverse-proxy configurations..."
         for conf in $PANEL_PROXY_CONF; do
             $SUDO rm -f "$conf" 2>/dev/null || true
         done
-        if command -v nginx &>/dev/null; then $SUDO nginx -t 2>/dev/null && $SUDO systemctl reload nginx 2>/dev/null || true; fi
-        if command -v apache2ctl &>/dev/null; then $SUDO apache2ctl configtest 2>/dev/null && $SUDO systemctl reload apache2 2>/dev/null || true; fi
+        # Also remove enabled symlinks
+        for conf in $PANEL_PROXY_CONF; do
+            local conf_name
+            conf_name=$(basename "$conf")
+            # Remove symlink from sites-enabled if it points to sites-available
+            if [ -L "/etc/nginx/sites-enabled/$conf_name" ]; then
+                $SUDO rm -f "/etc/nginx/sites-enabled/$conf_name" 2>/dev/null || true
+            fi
+        done
+        if command -v nginx &>/dev/null; then
+            if $SUDO nginx -t 2>/dev/null; then
+                $SUDO systemctl reload nginx 2>/dev/null || true
+                log_success "Nginx configuration reloaded."
+            else
+                log_warning "Nginx configuration test failed. Nginx not reloaded."
+            fi
+        fi
         log_success "zPanel reverse-proxy configurations removed."
     fi
 
-    # Remove PM2 startup hook
+    # ── Step 8: Remove PM2 startup hook ──
     if command -v pm2 &>/dev/null; then
         log_step "Removing PM2 startup hook..."
         pm2 unstartup 2>/dev/null || true
@@ -1366,32 +1729,56 @@ delete_panel() {
         log_success "PM2 startup hook removed."
     fi
 
-    # Delete panel application files (verified directory only)
-    log_step "Removing panel files from $PANEL_DIR..."
+    # ── Step 9: Remove application files ──
+    log_step "Removing zPanel application files from $PANEL_DIR..."
     if [ -d "$PANEL_DIR" ]; then
         $SUDO rm -rf "$PANEL_DIR"
         log_success "Panel directory removed."
     fi
 
-    # Delete panel database and data (only if separately confirmed)
-    if [ "$DELETE_DATA" -eq 1 ]; then
-        log_step "Removing zPanel database and panel data..."
-        for item in $PANEL_DB_FILES; do
-            if [ -e "$item" ]; then
-                $SUDO rm -rf "$item" 2>/dev/null || true
-            fi
-        done
-        log_success "Panel database and data removed."
+    # ── Step 10: Remove database (mode 2 and 3) ──
+    if [ "$UNINSTALL_MODE" = "app_and_db" ] || [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
+        if [ -n "$PANEL_DB_FILES" ]; then
+            log_step "Removing zPanel database and panel data..."
+            for item in $PANEL_DB_FILES; do
+                if [ -e "$item" ]; then
+                    $SUDO rm -rf "$item" 2>/dev/null || true
+                fi
+            done
+            log_success "Panel database and data removed."
+        fi
     fi
 
-    # Clean up temporary installation files
+    # ── Step 11: Remove server data (mode 3 only) ──
+    if [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
+        if [ -n "$SERVER_DATA_DIRS" ]; then
+            log_step "Removing panel-managed server data..."
+            for sdir in $SERVER_DATA_DIRS; do
+                if [ -d "$sdir" ]; then
+                    $SUDO rm -rf "$sdir" 2>/dev/null || true
+                fi
+            done
+            log_success "Panel-managed server data removed."
+        fi
+    fi
+
+    # ── Step 12: Remove Docker containers (zPanel-owned only) ──
+    if command -v docker &>/dev/null && [ -n "$DOCKER_CONTAINERS" ]; then
+        log_step "Removing zPanel-owned Docker containers..."
+        for cname in $DOCKER_CONTAINERS; do
+            $SUDO docker rm -f "$cname" 2>/dev/null || true
+        done
+        log_success "zPanel Docker containers removed."
+    fi
+
+    # ── Step 13: Clean up temporary installation files ──
     log_step "Cleaning up temporary installation files..."
-    $SUDO rm -rf /tmp/zpanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz 2>/dev/null || true
+    $SUDO rm -rf /tmp/zpanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz /tmp/zpanel_node_install 2>/dev/null || true
     log_success "Temporary files cleaned."
 
-    # ── Verify removal ──
+    # ── Step 14: Verify removal ──
     echo ""
-    log_step "Verifying deletion..."
+    log_step "Verifying uninstallation..."
     VERIFY_OK=1
     if [ -d "$PANEL_DIR" ]; then
         log_error "Panel directory still exists at $PANEL_DIR"
@@ -1408,12 +1795,13 @@ delete_panel() {
 
     log_divider
     if [ "$VERIFY_OK" -eq 1 ]; then
-        echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely deleted.${NC}"
+        echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely uninstalled.${NC}"
     else
-        echo -e "  ${YELLOW}${BOLD}⚠ zPanel deletion completed with warnings. Some items may remain.${NC}"
+        echo -e "  ${YELLOW}${BOLD}⚠ Uninstallation completed with warnings. Some items may remain.${NC}"
     fi
     echo ""
     echo -e "  ${BOLD}Cloudflare Tunnel was NOT touched and remains operational.${NC}"
+    echo -e "  ${BOLD}SSH, networking, and unrelated services remain intact.${NC}"
     echo ""
 }
 
@@ -1424,44 +1812,56 @@ while true; do
     print_banner
     echo -e "  ${BOLD}zPanel MANAGEMENT & INSTALLER${NC}"
     echo ""
-    echo -e "    ${BOLD}[1]${NC} Install zPanel (Node.js + PM2)"
-    echo -e "    ${BOLD}[2]${NC} Cloudflare Tunnel"
-    echo -e "    ${BOLD}[3]${NC} Update zPanel"
-    echo -e "    ${BOLD}[4]${NC} Create Admin User"
-    echo -e "    ${BOLD}[5]${NC} Restart zPanel"
-    echo -e "    ${BOLD}${RED}[6]${NC} ${RED}Delete Panel${NC}"
+    echo -e "    ${BOLD}[1]${NC} Install Panel (Node.js Only)"
+    echo -e "    ${BOLD}[2]${NC} Install Panel (Node.js + Docker Support)"
+    echo -e "    ${BOLD}[3]${NC} Install Panel (Development Mode)"
+    echo -e "    ${BOLD}[4]${NC} Update Panel"
+    echo -e "    ${BOLD}[5]${NC} Cloudflare Tunnel"
+    echo -e "    ${BOLD}[6]${NC} Create Admin User"
+    echo -e "    ${BOLD}[7]${NC} Restart Panel"
+    echo -e "    ${BOLD}${RED}[8]${NC} ${RED}Uninstall Panel${NC}"
     echo -e "    ${BOLD}[0]${NC} Exit"
     echo ""
     log_divider
     echo -e "  \c"
-    read -p "Choose an option [0-6]: " MAIN_CHOICE
+    read -p "Choose an option [0-8]: " MAIN_CHOICE
 
     case "$MAIN_CHOICE" in
         1)
-            install_zpanel
+            install_zpanel "nodejs"
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         2)
-            cloudflare_tunnel_option
+            install_zpanel "docker"
+            echo ""
+            read -p "  Press Enter to return to main menu..."
             ;;
         3)
-            update_zpanel
+            install_zpanel "dev"
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         4)
-            create_admin_user
+            update_zpanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         5)
+            cloudflare_tunnel_option
+            ;;
+        6)
+            create_admin_user
+            echo ""
+            read -p "  Press Enter to return to main menu..."
+            ;;
+        7)
             restart_zpanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
-        6)
-            delete_panel
+        8)
+            uninstall_zpanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
@@ -1471,7 +1871,7 @@ while true; do
             exit 0
             ;;
         *)
-            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 0 and 6."
+            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 0 and 8."
             sleep 1
             ;;
     esac
