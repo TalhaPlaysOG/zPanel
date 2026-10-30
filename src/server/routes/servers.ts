@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { importWorld, getWorldInfo, analyzeWorld } from "../controllers/world.js";
 import { requireAuth } from "../middleware/auth.js";
-import { getServers, createServer, checkPort, getServer, deleteServer, startServer, stopServer, restartServer, changeServerVersion, migrateServerRuntime, getFiles, uploadFile, uploadChunk, completeUpload, deleteFile, renameFile, saveFileContent, sendCommand, getServerStats, updateOwner, updateIpAlias, getBackups, createBackup, downloadBackup, deleteBackup, restoreBackup, unzipFile, zipFiles, installPlugin, installMod, updateResources, updateSuspend , createFile, createDirectory, downloadFile} from "../controllers/servers.js";
+import { getServers, createServer, checkPort, getServer, getServerLogs, deleteServer, startServer, stopServer, restartServer, changeServerVersion, migrateServerRuntime, getFiles, uploadFile, uploadChunk, completeUpload, deleteFile, renameFile, saveFileContent, sendCommand, getServerStats, updateOwner, updateIpAlias, getBackups, createBackup, downloadBackup, deleteBackup, restoreBackup, unzipFile, zipFiles, installPlugin, installMod, updateResources, updateSuspend , createFile, createDirectory, downloadFile} from "../controllers/servers.js";
 import multer from "multer";
 
 const router = express.Router();
@@ -14,6 +14,7 @@ router.get("/", getServers);
 router.get("/check-port", checkPort);
 router.post("/", createServer);
 router.get("/:id", getServer);
+router.get("/:id/logs", getServerLogs);
 router.get("/:id/stats", getServerStats);
 router.delete("/:id", deleteServer);
 router.put("/:id/owner", updateOwner);
@@ -68,9 +69,7 @@ router.get("/:id/playit", async (req, res) => {
   }
   const serverName = server ? server.name.replace(/[^a-zA-Z0-9_-]/g, "_") : id;
   const pm2Name = `playit_${serverName}`;
-  
-  const { exec } = await import("child_process"); console.log("running exec..."); 
-  
+  const { exec } = await import("child_process");
   exec("npx pm2 jlist", (err, stdout) => {
     let status = "stopped";
     try {

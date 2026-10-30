@@ -1,416 +1,530 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  Cloud, Play, Square, Loader2, Link as LinkIcon, RefreshCw, 
-  Copy, Check, Shield, Globe, Terminal, ExternalLink, HelpCircle, AlertCircle
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import {
+  Cloud,
+  ShieldCheck,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Copy,
+  RefreshCw,
+  Play,
+  Square,
+  RotateCw,
+  Link2,
+  AlertTriangle,
+  Terminal,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Lock,
+} from "lucide-react";
+import PageHeader from "../components/PageHeader";
+import { useAuth } from "../context/AuthContext";
 
-interface CloudflareConfig {
-  mode: "quick" | "token";
-  token?: string;
-  protocol?: "tcp" | "udp" | "http";
-  port?: number;
+interface TunnelStatus {
+  status: "not-installed" | "not-configured" | "running" | "stopped" | "error";
+  installed: boolean;
+  binaryPath: string | null;
+  serviceInstalled: boolean;
+  serviceActive: boolean;
+  serviceEnabled: boolean;
+  managedProcess: boolean;
+  running: boolean;
+  connection: "connected" | "connecting" | "disconnected" | "error";
+  tokenConfigured: boolean;
+  tunnelUrl: string | null;
+  lastError: string | null;
+  logs: string;
+  checkedAt: string;
 }
 
-export default function CloudflareTunnel({ serverId, server }: { serverId: string; server?: any }) {
-  const [status, setStatus] = useState<"running" | "stopped" | "checking" | "error">("checking");
-  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string>("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showToken, setShowToken] = useState(false);
+type Notice = { type: "success" | "error" | "info"; message: string } | null;
 
-  // Form states
-  const [mode, setMode] = useState<"quick" | "token">("quick");
-  const [token, setToken] = useState("");
-  const [protocol, setProtocol] = useState<"tcp" | "udp" | "http">("tcp");
-  const [port, setPort] = useState<number>(server?.port || 25565);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+const statusStyles: Record<string, string> = {
+  running: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  stopped: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  error: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  "not-installed": "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  "not-configured": "bg-amber-500/15 text-amber-300 border-amber-500/30",
+};
 
-  const logsEndRef = useRef<HTMLDivElement>(null);
+const statusLabels: Record<string, string> = {
+  running: "Running",
+  stopped: "Stopped",
+  error: "Error",
+  "not-installed": "Not Installed",
+  "not-configured": "Not Configured",
+};
+
+const connectionStyles: Record<string, string> = {
+  connected: "text-emerald-300",
+  connecting: "text-sky-300",
+  disconnected: "text-slate-400",
+  error: "text-rose-300",
+};
+
+const connectionLabels: Record<string, string> = {
+  connected: "Connected",
+  connecting: "Connecting…",
+  disconnected: "Disconnected",
+  error: "Connection Error",
+};
+
+export default function CloudflareTunnel() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
+
+  const [status, setStatus] = useState<TunnelStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [action, setAction] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  const [tokenInput, setTokenInput] = useState("");
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchStatus = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const { data } = await axios.get<TunnelStatus>("/api/cloudflare/status");
+      setStatus(data);
+      setNotice((prev) => (prev?.type === "error" ? prev : null));
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to load tunnel status";
+      setNotice({ type: "error", message });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
     fetchStatus();
-    const interval = setInterval(fetchStatus, 4000);
+    const interval = setInterval(() => fetchStatus(true), 5000);
     return () => clearInterval(interval);
-  }, [serverId]);
+  }, [fetchStatus, isAdmin]);
 
   useEffect(() => {
-    if (server?.port && !port) {
-      setPort(server.port);
-    }
-  }, [server]);
+    if (!revealedToken) return;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setRevealedToken(null), 60000);
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [revealedToken]);
 
-  const fetchStatus = async () => {
+  const runAction = async (name: string, fn: () => Promise<any>, successMessage: string) => {
+    setAction(name);
+    setNotice(null);
     try {
-      const res = await axios.get(`/api/servers/${serverId}/cloudflare`);
-      setStatus(res.data.status);
-      setTunnelUrl(res.data.tunnelUrl || null);
-      if (res.data.logs !== undefined) {
-        setLogs(res.data.logs);
-      }
-      if (res.data.config) {
-        if (res.data.config.mode) setMode(res.data.config.mode);
-        if (res.data.config.token) setToken(res.data.config.token);
-        if (res.data.config.protocol) setProtocol(res.data.config.protocol);
-        if (res.data.config.port) setPort(res.data.config.port);
-      }
-    } catch (e: any) {
-      console.error("Failed to fetch Cloudflare tunnel status", e);
+      const response = await fn();
+      if (response?.data?.status) setStatus(response.data.status);
+      else await fetchStatus(true);
+      setNotice({ type: "success", message: successMessage });
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Operation failed";
+      setNotice({ type: "error", message });
+    } finally {
+      setAction(null);
     }
   };
 
-  const handleStart = async () => {
-    setIsProcessing(true);
-    setErrorMessage(null);
-    try {
-      if (mode === "token" && !token.trim()) {
-        setErrorMessage("Please provide a valid Cloudflare Zero Trust Tunnel Token.");
-        setIsProcessing(false);
-        return;
-      }
+  const handleConnect = () => {
+    const token = tokenInput.trim();
+    runAction(
+      "connect",
+      () => axios.post("/api/cloudflare/connect", token ? { token } : {}),
+      token ? "Tunnel token saved and tunnel started." : "Cloudflare Tunnel started."
+    ).then(() => setTokenInput(""));
+  };
 
-      await axios.post(`/api/servers/${serverId}/cloudflare/start`, {
-        mode,
-        token: token.trim(),
-        protocol,
-        port: Number(port) || 25565
+  const handleUpdateToken = () => {
+    const token = tokenInput.trim();
+    if (!token) {
+      setNotice({ type: "error", message: "Paste a tunnel token or the full cloudflared install command first." });
+      return;
+    }
+    runAction(
+      "token",
+      () => axios.post("/api/cloudflare/token", { token }),
+      "Tunnel token updated and service restarted."
+    ).then(() => setTokenInput(""));
+  };
+
+  const handleRestart = () =>
+    runAction("restart", () => axios.post("/api/cloudflare/restart"), "Cloudflare Tunnel restarted.");
+
+  const handleStop = () =>
+    runAction("stop", () => axios.post("/api/cloudflare/stop"), "Cloudflare Tunnel stopped.");
+
+  const toggleReveal = async () => {
+    if (revealedToken) {
+      setRevealedToken(null);
+      return;
+    }
+    setTokenBusy(true);
+    try {
+      const { data } = await axios.get("/api/cloudflare/token");
+      setRevealedToken(data.token);
+    } catch (err: any) {
+      setNotice({
+        type: "error",
+        message: err?.response?.data?.error || err.message || "Failed to read tunnel token",
       });
-      setStatus("running");
-      await fetchStatus();
-    } catch (e: any) {
-      setErrorMessage(e.response?.data?.error || e.message || "Failed to start Cloudflare Tunnel");
     } finally {
-      setIsProcessing(false);
+      setTokenBusy(false);
     }
   };
 
-  const handleStop = async () => {
-    setIsProcessing(true);
-    setErrorMessage(null);
+  const copyToken = async () => {
+    setTokenBusy(true);
     try {
-      await axios.post(`/api/servers/${serverId}/cloudflare/stop`);
-      setStatus("stopped");
-      setTunnelUrl(null);
-      await fetchStatus();
-    } catch (e: any) {
-      setErrorMessage(e.response?.data?.error || e.message || "Failed to stop Cloudflare Tunnel");
+      let token = revealedToken;
+      if (!token) {
+        const { data } = await axios.get("/api/cloudflare/token");
+        token = data.token;
+      }
+      await navigator.clipboard.writeText(token as string);
+      setNotice({ type: "success", message: "Tunnel token copied to clipboard." });
+    } catch (err: any) {
+      setNotice({
+        type: "error",
+        message: err?.response?.data?.error || err.message || "Failed to copy tunnel token",
+      });
     } finally {
-      setIsProcessing(false);
+      setTokenBusy(false);
     }
   };
 
-  const handleReset = async () => {
-    setIsProcessing(true);
-    setErrorMessage(null);
-    try {
-      await axios.post(`/api/servers/${serverId}/cloudflare/reset`);
-      setStatus("stopped");
-      setTunnelUrl(null);
-      setLogs("");
-      await fetchStatus();
-    } catch (e: any) {
-      setErrorMessage(e.response?.data?.error || e.message || "Failed to reset Cloudflare Tunnel");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const statusKey = status?.status || "not-configured";
+  const statusStyle = statusStyles[statusKey] || statusStyles["not-configured"];
+  const connectionKey = status?.connection || "disconnected";
+  const connectionStyle = connectionStyles[connectionKey] || connectionStyles.disconnected;
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const logLines = useMemo(() => {
+    const raw = status?.logs || "";
+    return raw.split(/\r?\n/).filter((line) => line.trim()).slice(-120);
+  }, [status?.logs]);
 
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="p-4 sm:p-6 h-full overflow-y-auto custom-scrollbar"
-    >
-      <div className="max-w-4xl mx-auto space-y-6 pb-12">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-subtle pb-5">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 shadow-sm">
-                <Cloud className="w-6 h-6" />
-              </div>
-              Cloudflare Tunnel
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Expose your server globally through Cloudflare's secure Anycast network with DDoS defense and Zero Trust tunneling.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={fetchStatus}
-              className="p-2 bg-muted/80 hover:bg-muted text-foreground-muted hover:text-white rounded-xl border border-border-subtle transition-colors"
-              title="Refresh status"
-            >
-              <RefreshCw size={16} className={status === "checking" ? "animate-spin" : ""} />
-            </button>
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <div className="flex-1">{errorMessage}</div>
-            <button onClick={() => setErrorMessage(null)} className="text-red-400/70 hover:text-red-300 text-xs">Dismiss</button>
-          </div>
-        )}
-
-        {/* Tunnel Status Banner */}
-        <div className="bg-card/90 border border-border-subtle rounded-2xl p-5 shadow-lg backdrop-blur-md">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                {status === "running" ? (
-                  <span className="flex h-4 w-4 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
-                  </span>
-                ) : status === "checking" ? (
-                  <Loader2 className="w-4 h-4 text-theme-400 animate-spin" />
-                ) : (
-                  <span className="inline-block w-4 h-4 rounded-full bg-zinc-600"></span>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">Tunnel Status:</span>
-                  <span className={`text-xs font-mono uppercase px-2 py-0.5 rounded-full font-bold ${
-                    status === "running" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                    status === "checking" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
-                    "bg-zinc-800 text-zinc-400 border border-zinc-700"
-                  }`}>
-                    {status}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {status === "running" 
-                    ? `Active routing (${mode === "token" ? "Zero Trust Tunnel" : "Quick Tunnel via trycloudflare.com"})`
-                    : "Tunnel daemon is currently stopped"}
-                </p>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {status === "running" ? (
-                <button
-                  onClick={handleStop}
-                  disabled={isProcessing}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-semibold shadow-md transition-all disabled:opacity-50"
-                >
-                  {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
-                  <span>Stop Tunnel</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleStart}
-                  disabled={isProcessing}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 bg-theme-600 hover:bg-theme-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-theme-600/20 transition-all disabled:opacity-50"
-                >
-                  {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                  <span>Start Tunnel</span>
-                </button>
-              )}
-              <button
-                onClick={handleReset}
-                disabled={isProcessing}
-                className="px-3 py-2 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-white rounded-xl text-xs font-semibold border border-border-subtle transition-all disabled:opacity-50"
-                title="Reset Tunnel Process"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-
-          {/* Active Public URL Display */}
-          {status === "running" && tunnelUrl && (
-            <div className="mt-5 pt-4 border-t border-border-subtle flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-950/60 p-4 rounded-xl border border-theme-500/20 shadow-inner">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <Globe className="w-5 h-5 text-theme-400 shrink-0" />
-                <div className="overflow-hidden">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-                    Public Endpoint URL
-                  </span>
-                  <span className="font-mono text-sm text-theme-300 font-semibold truncate block">
-                    {tunnelUrl}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => copyToClipboard(tunnelUrl)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-600/20 hover:bg-theme-600/30 text-theme-300 border border-theme-600/40 rounded-lg text-xs font-mono transition-colors"
-                >
-                  {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
-                  <span>{copied ? "Copied" : "Copy URL"}</span>
-                </button>
-                <a
-                  href={tunnelUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
-                  title="Open in new tab"
-                >
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Configuration Box */}
-        <div className="bg-card/80 border border-border-subtle rounded-2xl p-6 shadow-md">
-          <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-theme-400" />
-            Tunnel Configuration
-          </h2>
-
-          {/* Mode Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <div 
-              onClick={() => status !== "running" && setMode("quick")}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                mode === "quick" 
-                  ? "bg-theme-600/10 border-theme-500 ring-1 ring-theme-500" 
-                  : "bg-muted/40 border-border hover:bg-muted/60"
-              } ${status === "running" ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-sm text-foreground">Quick Tunnel</span>
-                <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                  Instant / Free
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Creates an automatic public endpoint (*.trycloudflare.com). No Cloudflare account required.
-              </p>
-            </div>
-
-            <div 
-              onClick={() => status !== "running" && setMode("token")}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                mode === "token" 
-                  ? "bg-theme-600/10 border-theme-500 ring-1 ring-theme-500" 
-                  : "bg-muted/40 border-border hover:bg-muted/60"
-              } ${status === "running" ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-sm text-foreground">Zero Trust Token</span>
-                <span className="text-[10px] font-mono uppercase bg-theme-500/10 text-theme-400 border border-theme-500/20 px-2 py-0.5 rounded-full">
-                  Custom Domain
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Connects directly to your Cloudflare Zero Trust account and custom domain via tunnel token.
-              </p>
-            </div>
-          </div>
-
-          {/* Form Fields */}
-          <div className="space-y-4">
-            {mode === "quick" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Target Protocol</label>
-                  <select
-                    disabled={status === "running"}
-                    value={protocol}
-                    onChange={(e: any) => setProtocol(e.target.value)}
-                    className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-theme-500 disabled:opacity-50"
-                  >
-                    <option value="tcp">TCP (Minecraft Java Edition default)</option>
-                    <option value="udp">UDP (Minecraft Bedrock Edition)</option>
-                    <option value="http">HTTP (Web Maps / APIs / Consoles)</option>
-                  </select>
-                  <span className="text-[11px] text-muted-foreground mt-1 block">
-                    Select TCP for Java Minecraft servers (port 25565).
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Target Port</label>
-                  <input
-                    type="number"
-                    disabled={status === "running"}
-                    value={port}
-                    onChange={(e) => setPort(Number(e.target.value))}
-                    placeholder="25565"
-                    className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-theme-500 disabled:opacity-50 font-mono"
-                  />
-                  <span className="text-[11px] text-muted-foreground mt-1 block">
-                    Server's internal listening port (auto-filled with {server?.port || 25565}).
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">Cloudflare Tunnel Token</label>
-                <div className="relative">
-                  <input
-                    type={showToken ? "text" : "password"}
-                    disabled={status === "running"}
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full bg-background border border-border rounded-xl pl-3 pr-20 py-2.5 text-xs text-foreground focus:outline-none focus:border-theme-500 disabled:opacity-50 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showToken ? "Hide" : "Show"}
-                  </button>
-                </div>
-                <span className="text-[11px] text-muted-foreground mt-1.5 block">
-                  Obtained from Cloudflare Zero Trust Dashboard → Networks → Tunnels → Run Tunnel.
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Live Tunnel Logs Console */}
-        <div className="bg-zinc-950 border border-border-subtle rounded-2xl overflow-hidden shadow-xl">
-          <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/80 border-b border-zinc-800">
-            <div className="flex items-center gap-2">
-              <Terminal size={15} className="text-theme-400" />
-              <span className="text-xs font-mono font-semibold text-zinc-300">Cloudflared Daemon Logs</span>
-            </div>
-            <span className="text-[11px] font-mono text-zinc-500">Live stream</span>
-          </div>
-          <div className="p-4 font-mono text-xs text-zinc-300 bg-black/60 max-h-72 overflow-y-auto custom-scrollbar whitespace-pre-wrap leading-relaxed select-text">
-            {logs ? (
-              logs
-            ) : (
-              <span className="text-zinc-600 italic">No active logs. Click "Start Tunnel" to initialize cloudflared.</span>
-            )}
-            <div ref={logsEndRef} />
-          </div>
-        </div>
-
-        {/* Informational Tips Card */}
-        <div className="bg-theme-950/20 border border-theme-600/20 rounded-2xl p-5">
-          <h3 className="text-xs font-bold text-theme-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-            <HelpCircle size={14} /> Connecting Players with Cloudflare Tunnel
-          </h3>
-          <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside leading-relaxed">
-            <li>For HTTP/Web traffic (like Dynmap or BlueMap), Quick Tunnel URLs work directly in any browser.</li>
-            <li>For Minecraft Java TCP connections using Zero Trust, players can connect via <code className="bg-black/40 px-1.5 py-0.5 rounded text-zinc-300">cloudflared access tcp --hostname yourdomain.com --url localhost:25565</code>, or through Cloudflare Spectrum.</li>
-            <li>Cloudflare Tunnels protect your host IP from DDoS attacks without exposing raw open ports to the public internet.</li>
-          </ul>
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Cloudflare Tunnel" subtitle="PANEL CONNECTIVITY" />
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center">
+          <Lock className="mx-auto mb-3 h-8 w-8 text-rose-300" />
+          <h3 className="text-sm font-semibold text-rose-200">Administrator access required</h3>
+          <p className="mt-1 text-xs text-rose-200/70">
+            Only admins and owners can view or change the panel Cloudflare Tunnel.
+          </p>
         </div>
       </div>
-    </motion.div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Cloudflare Tunnel"
+        subtitle="PANEL CONNECTIVITY"
+        actions={
+          <button
+            onClick={() => fetchStatus(true)}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] px-3 py-2 text-xs font-semibold text-[#94a3b8] transition-all hover:border-[rgba(139,92,246,0.35)] hover:text-[#f0f4ff] disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        }
+      />
+
+      {notice && (
+        <div
+          className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm ${
+            notice.type === "success"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+              : notice.type === "error"
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                : "border-sky-500/30 bg-sky-500/10 text-sky-200"
+          }`}
+        >
+          {notice.type === "success" ? (
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          ) : notice.type === "error" ? (
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          ) : (
+            <Cloud size={16} className="mt-0.5 shrink-0" />
+          )}
+          <span className="whitespace-pre-wrap break-words">{notice.message}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.5)] py-16 text-sm text-[#94a3b8]">
+          <Loader2 size={18} className="animate-spin" /> Loading tunnel status…
+        </div>
+      ) : (
+        <>
+          {/* Status cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-4 shadow-lg backdrop-blur-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  <Cloud size={14} /> Tunnel
+                </span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusStyle}`}>
+                  {statusLabels[statusKey] || statusKey}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-[#f0f4ff]">
+                {status?.running ? "Tunnel process active" : "Tunnel process inactive"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#64748b]">
+                {status?.managedProcess ? "Panel-managed process" : status?.serviceInstalled ? "Systemd service" : "No service"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-4 shadow-lg backdrop-blur-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  <ShieldCheck size={14} /> Service
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    status?.serviceActive
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                      : "border-slate-500/30 bg-slate-500/15 text-slate-300"
+                  }`}
+                >
+                  {status?.serviceActive ? "Running" : status?.serviceInstalled ? "Stopped" : "Not Installed"}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-[#f0f4ff]">
+                {status?.serviceInstalled ? "cloudflared.service" : "cloudflared binary"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#64748b]">
+                {status?.serviceInstalled
+                  ? status.serviceEnabled
+                    ? "Enabled on boot"
+                    : "Auto-start disabled"
+                  : status?.installed
+                    ? "Binary available"
+                    : "Not installed"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-4 shadow-lg backdrop-blur-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  <Link2 size={14} /> Connection
+                </span>
+                <span className={`text-[11px] font-bold ${connectionStyle}`}>
+                  {connectionLabels[connectionKey] || connectionKey}
+                </span>
+              </div>
+              <p className="truncate text-sm font-semibold text-[#f0f4ff]">
+                {status?.tunnelUrl ? (
+                  <a href={status.tunnelUrl} target="_blank" rel="noreferrer" className="text-purple-300 hover:underline">
+                    {status.tunnelUrl}
+                  </a>
+                ) : status?.running ? (
+                  "Waiting for Cloudflare edge"
+                ) : (
+                  "No active connection"
+                )}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#64748b]">
+                Checked {status?.checkedAt ? new Date(status.checkedAt).toLocaleTimeString() : "—"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-4 shadow-lg backdrop-blur-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  <KeyRound size={14} /> Token
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    status?.tokenConfigured
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                      : "border-amber-500/30 bg-amber-500/15 text-amber-300"
+                  }`}
+                >
+                  {status?.tokenConfigured ? "Configured" : "Missing"}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-[#f0f4ff]">
+                {status?.tokenConfigured ? "Stored securely (mode 600)" : "No token saved"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#64748b]">Only visible to administrators</p>
+            </div>
+          </div>
+
+          {status?.lastError && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+              <XCircle size={15} className="mt-0.5 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">{status.lastError}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="space-y-6 xl:col-span-2">
+              {/* Token management */}
+              <section className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-5 shadow-lg backdrop-blur-xl sm:p-6">
+                <div className="mb-4 flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-purple-500/30 bg-purple-600/20 text-[#a78bfa]">
+                    <KeyRound size={17} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#f0f4ff]">Tunnel Token</h3>
+                    <p className="text-[11px] text-[#94a3b8]">
+                      Paste a token or the full <code className="text-purple-300">cloudflared service install</code> command.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[rgba(139,92,246,0.18)] bg-[rgba(6,9,26,0.6)] px-3 py-2">
+                  <Lock size={13} className="text-[#64748b]" />
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-[#cbd5e1]">
+                    {revealedToken ? revealedToken : status?.tokenConfigured ? "••••••••••••••••••••••••••••••••" : "No token configured"}
+                  </span>
+                  <button
+                    onClick={toggleReveal}
+                    disabled={!status?.tokenConfigured || tokenBusy}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-2 py-1 text-[11px] font-semibold text-[#c4b5fd] transition hover:bg-[rgba(139,92,246,0.2)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {revealedToken ? <EyeOff size={12} /> : <Eye size={12} />}
+                    {revealedToken ? "Hide" : "Show"}
+                  </button>
+                  <button
+                    onClick={copyToken}
+                    disabled={!status?.tokenConfigured || tokenBusy}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-2 py-1 text-[11px] font-semibold text-[#c4b5fd] transition hover:bg-[rgba(139,92,246,0.2)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Copy size={12} /> Copy
+                  </button>
+                </div>
+
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  New token / command
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <input
+                      type={showTokenInput ? "text" : "password"}
+                      value={tokenInput}
+                      onChange={(e) => setTokenInput(e.target.value)}
+                      placeholder="eyJhIjoi... or sudo cloudflared service install eyJhIjoi..."
+                      spellCheck={false}
+                      autoComplete="off"
+                      className="w-full rounded-xl border border-[rgba(139,92,246,0.25)] bg-[rgba(6,9,26,0.8)] px-3.5 py-2.5 pr-10 font-mono text-xs text-white outline-none transition focus:border-[#8b5cf6]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTokenInput((v) => !v)}
+                      title={showTokenInput ? "Hide token" : "Show token"}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#64748b] transition hover:text-[#c4b5fd]"
+                    >
+                      {showTokenInput ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleUpdateToken}
+                    disabled={!!action || !tokenInput.trim()}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/30 transition hover:from-purple-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {action === "token" ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                    Update & Reconnect
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-[#64748b]">
+                  The token is written to a protected file on the server and is never returned by the public status API.
+                </p>
+              </section>
+
+              {/* Logs */}
+              <section className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-5 shadow-lg backdrop-blur-xl sm:p-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Terminal size={15} className="text-[#a78bfa]" />
+                    <h3 className="text-sm font-bold text-[#f0f4ff]">Tunnel Logs</h3>
+                  </div>
+                  <span className="font-mono text-[10px] text-[#64748b]">{logLines.length} lines</span>
+                </div>
+                <div className="max-h-[320px] overflow-y-auto rounded-xl border border-[rgba(139,92,246,0.12)] bg-black/50 p-3 custom-scrollbar">
+                  {logLines.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-[#64748b]">No tunnel logs available yet.</p>
+                  ) : (
+                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[#cbd5e1]">
+                      {logLines.join("\n")}
+                    </pre>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            {/* Controls */}
+            <aside className="space-y-4">
+              <section className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.7)] p-5 shadow-lg backdrop-blur-xl">
+                <h3 className="mb-1 text-sm font-bold text-[#f0f4ff]">Tunnel Controls</h3>
+                <p className="mb-4 text-[11px] text-[#94a3b8]">
+                  Start, reconnect or stop the panel's Cloudflare Tunnel.
+                </p>
+
+                <div className="space-y-2.5">
+                  <button
+                    onClick={handleConnect}
+                    disabled={!!action}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-teal-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {action === "connect" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                    Connect / Start
+                  </button>
+
+                  <button
+                    onClick={handleRestart}
+                    disabled={!!action || !status?.tokenConfigured}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-bold text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {action === "restart" ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+                    Reconnect / Restart
+                  </button>
+
+                  <button
+                    onClick={handleStop}
+                    disabled={!!action || !status?.running}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-bold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {action === "stop" ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
+                    Stop Tunnel
+                  </button>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.5)] p-5">
+                <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
+                  <ShieldCheck size={13} /> Security
+                </h3>
+                <ul className="space-y-1.5 text-[11px] text-[#94a3b8]">
+                  <li>• Token stored with mode 600.</li>
+                  <li>• Full token only available to admins.</li>
+                  <li>• Token never written to tunnel logs.</li>
+                  <li>• Service reuses the existing cloudflared unit.</li>
+                </ul>
+              </section>
+            </aside>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

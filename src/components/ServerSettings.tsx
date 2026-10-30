@@ -9,6 +9,8 @@ import SearchableDropdown from "./SearchableDropdown";
 export default function ServerSettings({ serverId, server }: { serverId: string, server: any }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeletingAction, setIsDeletingAction] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [owner, setOwner] = useState(server?.owner || "");
   const [ipAlias, setIpAlias] = useState(server?.ipAlias || "");
@@ -54,17 +56,21 @@ export default function ServerSettings({ serverId, server }: { serverId: string,
   }, [user, selectedType]);
 
   if (!server) return null;
-  const canManage = user?.role === "admin" || server.owner === user?.id;
+  const canManage = user?.role === "admin" || user?.role === "owner" || server.owner === user?.id;
 
   const handleDelete = async () => {
+    if (deleteConfirmText.trim() !== String(server.name || "").trim()) {
+      setDeleteError("Type the server name exactly to confirm deletion.");
+      return;
+    }
     try {
       setIsDeletingAction(true);
+      setDeleteError(null);
       await axios.delete(`/api/servers/${serverId}`);
       navigate("/servers");
-    } catch(e) {
-      alert("Failed to delete server");
+    } catch (e: any) {
+      setDeleteError(e?.response?.data?.error || e.message || "Failed to delete server");
       setIsDeletingAction(false);
-      setShowDeleteConfirm(false);
     }
   };
 
@@ -154,6 +160,69 @@ export default function ServerSettings({ serverId, server }: { serverId: string,
                 className="px-6 py-2.5 bg-theme-600 hover:bg-theme-500 text-black font-semibold rounded-xl transition-all disabled:opacity-50"
               >
                 {isRestarting ? "Restarting..." : "OK"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950/95 backdrop-blur-2xl border border-rose-500/40 p-6 md:p-8 rounded-3xl max-w-lg w-full shadow-[0_0_60px_-10px_rgba(244,63,94,0.45)] ring-1 ring-rose-500/20 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-600 to-red-500" />
+            <div className="flex items-start mb-4">
+              <div className="bg-rose-600/20 p-3 rounded-xl mr-4 text-rose-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white mb-1">Delete “{server.name}”?</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  This permanently deletes the server, all worlds and files, backups, logs, configuration,
+                  SFTP access, tunnel settings and database records. The server is stopped first.
+                  <strong className="text-rose-300"> This action cannot be undone.</strong>
+                </p>
+              </div>
+            </div>
+
+            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+              Type <span className="font-mono text-rose-300">{server.name}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              autoFocus
+              spellCheck={false}
+              autoComplete="off"
+              className="w-full bg-black/60 border border-rose-500/30 focus:border-rose-500 rounded-xl px-4 py-2.5 text-white outline-none font-mono text-sm"
+              placeholder={server.name}
+            />
+
+            {deleteError && (
+              <p className="mt-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2.5 mt-6">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                  setDeleteError(null);
+                }}
+                disabled={isDeletingAction}
+                className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold rounded-xl transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeletingAction || deleteConfirmText.trim() !== String(server.name || "").trim()}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isDeletingAction ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
           </div>
@@ -532,6 +601,28 @@ export default function ServerSettings({ serverId, server }: { serverId: string,
                 </div>
               </>
             ) : null}
+
+            <div className="bg-black/40 dark:bg-black/40 backdrop-blur-xl border border-rose-500/30 p-6 md:p-8 rounded-3xl shadow-[0_0_40px_-15px_rgba(244,63,94,0.35)] ring-1 ring-rose-500/10 relative z-10 group hover:bg-black/60 transition-colors mt-8">
+              <h3 className="text-rose-400 font-bold mb-2 flex items-center">
+                <Trash2 className="w-5 h-5 mr-2" /> Danger Zone
+              </h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Permanently delete this server and all of its data. The server will be stopped gracefully first.
+                Files, worlds, backups, logs, configuration, SFTP access and tunnel settings are removed.
+              </p>
+              <button
+                onClick={() => {
+                  setDeleteConfirmText("");
+                  setDeleteError(null);
+                  setShowDeleteConfirm(true);
+                }}
+                disabled={isDeletingAction}
+                className="px-5 py-2.5 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-500/40 font-semibold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Server
+              </button>
+            </div>
           </>
         ) : (
            <div className="text-muted-foreground text-sm p-4 bg-muted rounded-xl border border-border-subtle">

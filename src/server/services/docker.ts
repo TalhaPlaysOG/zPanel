@@ -25,12 +25,52 @@ export const isSandbox = !isDockerEnabled || (!fs.existsSync('/var/run/docker.so
   !(process.env.DOCKER_SOCKET_PATH && fs.existsSync(process.env.DOCKER_SOCKET_PATH)) &&
   process.platform !== 'win32');
 
+/**
+ * Sandbox/demo mode is only used when explicitly requested. By default the
+ * panel must never fake a running Minecraft server.
+ */
+export const isSandboxDemoMode = () => process.env.SANDBOX_MODE === "true";
+
 export const isNodeSandbox = (nodeId?: string) => {
-  if (!nodeId || nodeId === 'local') return isSandbox;
+  if (!nodeId || nodeId === 'local') return isSandboxDemoMode();
   return false;
 };
 
 export const defaultDocker = new Docker({ socketPath: getSocketPath() });
+
+let dockerAvailabilityCache: { checkedAt: number; available: boolean } | null = null;
+
+/**
+ * Check whether the local Docker daemon is actually usable. Results are cached
+ * briefly so polling the dashboard does not hammer the socket.
+ */
+export const isDockerAvailable = async (force = false): Promise<boolean> => {
+  if (isSandboxDemoMode()) return false;
+  if (!isDockerEnabled) return false;
+  if (
+    !dockerAvailabilityCache ||
+    force ||
+    Date.now() - dockerAvailabilityCache.checkedAt > 15000
+  ) {
+    let available = false;
+    try {
+      await Promise.race([
+        defaultDocker.ping(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Docker ping timeout")), 3000)),
+      ]);
+      available = true;
+    } catch {
+      available = false;
+    }
+    dockerAvailabilityCache = { checkedAt: Date.now(), available };
+  }
+  return dockerAvailabilityCache.available;
+};
+
+export const isDockerAvailableForNode = async (nodeId?: string): Promise<boolean> => {
+  if (nodeId && nodeId !== "local") return true; // remote node connectivity is handled by its API
+  return await isDockerAvailable();
+};
 
 export const getDocker = async (nodeId?: string) => {
   if (!nodeId || nodeId === "local") return defaultDocker;
@@ -331,7 +371,47 @@ export const createServerContainer = async (serverData: any, nodeId?: string) =>
   return container.id;
 };
 
-export const startContainer = async (containerId: string, nodeId?: string) => { console.log(`[startContainer] id=${containerId}, nodeId=${nodeId}`);
+/* ------------------------------------------------------------------ */
+/*  Container readiness detection                                      */
+/* ------------------------------------------------------------------ */
+
+const containerReady = new Map<string, boolean>();
+
+const CONTAINER_READY_RE =
+  /Done \([0-9.,]+s\)! For help, type "help"|Done \([0-9.,]+s\)|Listening on \/?[0-9a-zA-Z.:]+:\d+|Application Running|Server started/i;
+
+const clearContainerReady = (containerId?: string) => {
+  if (containerId) containerReady.delete(containerId);
+};
+
+const detectReadyFromLogs = async (docker: Docker, containerId: string): Promise<boolean> => {
+  try {
+    const container = docker.getContainer(containerId);
+    const buffer = await container.logs({ stdout: true, stderr: true, tail: 300 });
+    return CONTAINER_READY_RE.test(buffer.toString("utf8"));
+  } catch {
+    return false;
+  }
+};
+
+export const isContainerReady = async (containerId: string, nodeId?: string): Promise<boolean> => {
+  if (containerReady.get(containerId)) return true;
+  if (isNodeSandbox(nodeId)) return !!mockState[containerId.replace("mock-container-id-", "")];
+  try {
+    const docker = await getDocker(nodeId);
+    const container = docker.getContainer(containerId);
+    const info = await container.inspect();
+    if (!info.State.Running) return false;
+    const ready = await detectReadyFromLogs(docker, containerId);
+    if (ready) containerReady.set(containerId, true);
+    return ready;
+  } catch {
+    return false;
+  }
+};
+
+export const startContainer = async (containerId: string, nodeId?: string) => {
+  clearContainerReady(containerId);
   const docker = await getDocker(nodeId);
   if (isNodeSandbox(nodeId)) {
     const id = containerId.replace("mock-container-id-", "");
@@ -398,6 +478,7 @@ export const startContainer = async (containerId: string, nodeId?: string) => { 
 };
 
 export const stopContainer = async (containerId: string, nodeId?: string) => {
+  clearContainerReady(containerId);
   const docker = await getDocker(nodeId);
   if (isNodeSandbox(nodeId)) {
     const id = containerId.replace("mock-container-id-", "");
@@ -407,10 +488,11 @@ export const stopContainer = async (containerId: string, nodeId?: string) => {
     return;
   }
   const container = docker.getContainer(containerId);
-  await container.stop();
+  await container.stop({ t: 30 });
 };
 
 export const restartContainer = async (containerId: string, nodeId?: string) => {
+  clearContainerReady(containerId);
   const docker = await getDocker(nodeId);
   if (isNodeSandbox(nodeId)) {
     const id = containerId.replace("mock-container-id-", "");
@@ -424,6 +506,7 @@ export const restartContainer = async (containerId: string, nodeId?: string) => 
 };
 
 export const deleteContainer = async (containerId: string, nodeId?: string) => {
+  clearContainerReady(containerId);
   const docker = await getDocker(nodeId);
   if (isNodeSandbox(nodeId)) {
     const id = containerId.replace("mock-container-id-", "");
@@ -435,12 +518,13 @@ export const deleteContainer = async (containerId: string, nodeId?: string) => {
   try {
     const info = await container.inspect();
     if (info.State.Running) {
-      await container.stop();
+      await container.stop({ t: 30 }).catch(() => {});
     }
     await container.remove({ force: true });
   } catch (err) {
     console.error("Error deleting container", err);
   }
+  detachContainerSocket(containerId);
 };
 
 export const getContainerStatus = async (containerId: string, nodeId?: string) => {
@@ -448,12 +532,39 @@ export const getContainerStatus = async (containerId: string, nodeId?: string) =
   if (isNodeSandbox(nodeId)) {
     const id = containerId.replace("mock-container-id-", "");
     const isRunning = mockState[id] || false;
-    return { State: { Running: isRunning, Status: isRunning ? "running" : "exited", StartedAt: isRunning ? (mockStartedAt[id] || new Date().toISOString()) : null } };
+    return {
+      State: {
+        Running: isRunning,
+        Status: isRunning ? "online" : "offline",
+        Ready: isRunning,
+        StartedAt: isRunning ? mockStartedAt[id] || new Date().toISOString() : null,
+      },
+    };
   }
   try {
     const container = docker.getContainer(containerId);
     const info = await container.inspect();
-    return info;
+    if (!info.State.Running) {
+      return {
+        ...info,
+        State: {
+          ...info.State,
+          Running: false,
+          Status: info.State.Restarting ? "starting" : "offline",
+          Ready: false,
+        },
+      };
+    }
+    const ready = await isContainerReady(containerId, nodeId);
+    return {
+      ...info,
+      State: {
+        ...info.State,
+        Running: true,
+        Status: ready ? "online" : "starting",
+        Ready: ready,
+      },
+    };
   } catch (e) {
     return null;
   }
@@ -514,13 +625,14 @@ export const getContainerStats = async (containerId: string, nodeId?: string) =>
 
 export const getContainerLogs = async (containerId: string, nodeId?: string): Promise<string> => {
   const docker = await getDocker(nodeId);
-  if (isNodeSandbox(nodeId)) return "[System] Sandbox mode. No historical logs available.\r\n";
+  // Sandbox mode has no real process; never invent fake "logs".
+  if (isNodeSandbox(nodeId)) return "";
   try {
     const container = docker.getContainer(containerId);
-    
+
     // Convert Buffer log output to string safely. dockerode returns interleaved multiplexed streams if tty is false,
     // but we use tty: true in createServerContainer, so it's a raw stream buffer.
-    const logsBuffer = await container.logs({ stdout: true, stderr: true, tail: 100 });
+    const logsBuffer = await container.logs({ stdout: true, stderr: true, tail: 200 });
     return logsBuffer.toString('utf8');
   } catch (e) {
     return "";
@@ -528,24 +640,48 @@ export const getContainerLogs = async (containerId: string, nodeId?: string): Pr
 };
 
 const activeStreams: Record<string, NodeJS.ReadWriteStream> = {};
+const activeStreamServers: Record<string, Set<string>> = {};
+
+export const detachContainerSocket = (containerId: string) => {
+  const stream = activeStreams[containerId];
+  if (stream) {
+    try {
+      (stream as any).destroy?.();
+      (stream as any).end?.();
+    } catch {
+      /* ignore */
+    }
+    delete activeStreams[containerId];
+  }
+  delete activeStreamServers[containerId];
+};
 
 export const attachContainerSocket = async (containerId: string, serverId: string, nodeId?: string) => {
   const docker = await getDocker(nodeId);
   if (isNodeSandbox(nodeId)) {
     return;
   }
+  if (!activeStreamServers[containerId]) activeStreamServers[containerId] = new Set();
+  activeStreamServers[containerId].add(serverId);
+
+  if (activeStreams[containerId]) return;
+
   try {
     const container = docker.getContainer(containerId);
-    if (!activeStreams[containerId]) {
-      const stream = await container.attach({ stream: true, stdout: true, stderr: true, stdin: true });
-      activeStreams[containerId] = stream;
-      stream.on('data', (chunk: any) => {
-        panelEvents.emit("log", serverId, chunk.toString());
-      });
-      stream.on('end', () => {
-        delete activeStreams[containerId];
-      });
-    }
+    const stream = await container.attach({ stream: true, stdout: true, stderr: true, stdin: true });
+    activeStreams[containerId] = stream;
+    stream.on('data', (chunk: any) => {
+      for (const id of activeStreamServers[containerId] || [serverId]) {
+        panelEvents.emit("log", id, chunk.toString());
+      }
+    });
+    stream.on('error', (err: any) => {
+      console.error("Container stream error", err);
+      delete activeStreams[containerId];
+    });
+    stream.on('end', () => {
+      delete activeStreams[containerId];
+    });
   } catch(e) {
     console.error("Attach error", e);
   }
@@ -555,22 +691,29 @@ export const sendContainerCommand = async (containerId: string, command: string,
   const docker = await getDocker(nodeId);
 
   if (isNodeSandbox(nodeId)) {
-    // Handled by client local echo
-    return;
+    throw new Error("Sandbox mode has no real server process to send commands to.");
   }
-  if (activeStreams[containerId]) {
-    activeStreams[containerId].write(command + "\n");
-  } else {
-    try {
-      const container = docker.getContainer(containerId);
-      const stream = await container.attach({ stream: true, stdout: true, stderr: true, stdin: true });
-      activeStreams[containerId] = stream;
-      stream.write(command + "\n");
-      stream.on('data', (chunk: any) => {
-        // Will be broadcasted due to existing or new attach
-      });
-    } catch(e) {
-       console.error("Command error", e);
-    }
+
+  const container = docker.getContainer(containerId);
+  const info = await container.inspect();
+  if (!info.State.Running) {
+    throw new Error("Server container is not running.");
   }
+
+  let stream = activeStreams[containerId];
+  if (!stream) {
+    stream = await container.attach({ stream: true, stdout: true, stderr: true, stdin: true });
+    activeStreams[containerId] = stream;
+    activeStreamServers[containerId] = activeStreamServers[containerId] || new Set();
+    stream.on('data', (chunk: any) => {
+      for (const id of activeStreamServers[containerId] || []) {
+        panelEvents.emit("log", id, chunk.toString());
+      }
+    });
+    stream.on('error', () => {
+      delete activeStreams[containerId];
+    });
+  }
+
+  (stream as any).write(command + "\n");
 };

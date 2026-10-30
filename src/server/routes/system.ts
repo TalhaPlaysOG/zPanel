@@ -85,7 +85,17 @@ router.get("/stats", async (req, res) => {
        activeContainers = containers.filter(c => c.State === 'running').length;
     }
   } catch (err) {
-     // fallback
+    try {
+      const servers = (await readJSON("servers.json")) || [];
+      totalContainers = servers.length;
+      const { getLocalServerLifecycleStatus } = await import("../services/local.js");
+      activeContainers = servers.filter((s: any) => {
+        const st = getLocalServerLifecycleStatus(s.id);
+        return st === "online" || st === "starting";
+      }).length;
+    } catch {
+      // fallback
+    }
   }
   
   res.json({

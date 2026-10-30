@@ -10,7 +10,7 @@ import {
 import axios from "axios";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
-import { Server, Plus, ChevronRight, Settings, Lock } from "lucide-react";
+import { Server, Plus, ChevronRight, Settings, Lock, Trash2, AlertTriangle } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import ServerLiveStats from "../components/ServerLiveStats";
@@ -21,6 +21,7 @@ interface ServerRecord {
   id: string;
   name: string;
   status: ServerStatus;
+  owner?: string;
   cpu?: number;
   ram?: number;
   disk?: number;
@@ -32,6 +33,7 @@ interface ServersState {
   servers: ServerRecord[];
   error: string | null;
   isLoading: boolean;
+  refetch: () => Promise<void>;
 }
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -86,7 +88,7 @@ function useServers(pollIntervalMs = POLL_INTERVAL_MS): ServersState {
     };
   }, [fetchServers, pollIntervalMs]);
 
-  return { servers, error, isLoading };
+  return { servers, error, isLoading, refetch: fetchServers };
 }
 
 const StatusBadge = memo(function StatusBadge({
@@ -133,8 +135,12 @@ function Metric({ label, children }: { label: string; children: ReactNode }) {
 
 const ServerCard = memo(function ServerCard({
   server,
+  canDelete,
+  onDelete,
 }: {
   server: ServerRecord;
+  canDelete: boolean;
+  onDelete: (server: ServerRecord) => void;
 }) {
   const online = isOnline(server.status);
   const isSuspended = server.suspended;
@@ -203,7 +209,22 @@ const ServerCard = memo(function ServerCard({
   );
 
   return (
-    <motion.article variants={itemVariants}>
+    <motion.article variants={itemVariants} className="relative">
+      {canDelete && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDelete(server);
+          }}
+          title={`Delete ${server.name}`}
+          aria-label={`Delete ${server.name}`}
+          className="absolute right-12 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-300/80 transition-all hover:border-rose-500/50 hover:bg-rose-500/20 hover:text-rose-200 active:scale-95"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
       {isSuspended ? (
         <div className="group relative block overflow-hidden rounded-2xl border border-[rgba(239,68,68,0.2)] bg-[rgba(10,14,36,0.7)] p-5 opacity-70 md:p-6 cursor-not-allowed">
           {content}
@@ -262,7 +283,12 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
 
 export default function ServerList() {
   const { user } = useAuth();
-  const { servers, error, isLoading } = useServers();
+  const { servers, error, isLoading, refetch } = useServers();
+
+  const [deletingServer, setDeletingServer] = useState<ServerRecord | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const isAuthReady = user !== undefined;
   const isAdmin = isAuthReady && (user?.role === "admin" || user?.role === "owner");
@@ -272,6 +298,39 @@ export default function ServerList() {
     () => servers.reduce((n, s) => n + (isOnline(s.status) ? 1 : 0), 0),
     [servers],
   );
+
+  const openDelete = useCallback((server: ServerRecord) => {
+    setDeletingServer(server);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  }, []);
+
+  const closeDelete = useCallback(() => {
+    if (deleteBusy) return;
+    setDeletingServer(null);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  }, [deleteBusy]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deletingServer) return;
+    if (deleteConfirmText.trim() !== String(deletingServer.name || "").trim()) {
+      setDeleteError("Type the server name exactly to confirm deletion.");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await axios.delete(`/api/servers/${deletingServer.id}`);
+      setDeletingServer(null);
+      setDeleteConfirmText("");
+      await refetch();
+    } catch (err: any) {
+      setDeleteError(err?.response?.data?.error || err.message || "Failed to delete server");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [deleteConfirmText, deletingServer, refetch]);
 
   if (!isAuthReady || (isLoading && !hasServers)) return <LoadingState />;
 
@@ -331,13 +390,77 @@ export default function ServerList() {
         >
           {hasServers ? (
             servers.map((server) => (
-              <ServerCard key={server.id} server={server} />
+              <ServerCard
+                key={server.id}
+                server={server}
+                canDelete={isAdmin || server.owner === user?.id}
+                onDelete={openDelete}
+              />
             ))
           ) : (
             <EmptyState isAdmin={isAdmin} />
           )}
         </motion.section>
       </div>
+
+      {deletingServer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-rose-500/40 bg-[rgba(10,14,36,0.98)] p-6 shadow-[0_0_60px_-10px_rgba(244,63,94,0.45)] ring-1 ring-rose-500/20 md:p-8">
+            <div className="absolute left-0 top-0 h-1.5 w-full bg-gradient-to-r from-rose-600 to-red-500" />
+            <div className="mb-4 flex items-start">
+              <div className="mr-4 shrink-0 rounded-xl bg-rose-600/20 p-3 text-rose-400">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="mb-1 text-lg font-bold text-white">Delete “{deletingServer.name}”?</h3>
+                <p className="text-sm leading-relaxed text-[#94a3b8]">
+                  This permanently deletes the server, all worlds and files, backups, logs, configuration,
+                  SFTP access, tunnel settings and database records. The server is stopped first.
+                  <strong className="text-rose-300"> This action cannot be undone.</strong>
+                </p>
+              </div>
+            </div>
+
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
+              Type <span className="font-mono text-rose-300">{deletingServer.name}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              autoFocus
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={deletingServer.name}
+              className="w-full rounded-xl border border-rose-500/30 bg-black/60 px-4 py-2.5 font-mono text-sm text-white outline-none focus:border-rose-500"
+            />
+
+            {deleteError && (
+              <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                onClick={closeDelete}
+                disabled={deleteBusy}
+                className="rounded-xl bg-[rgba(255,255,255,0.06)] px-5 py-2.5 font-semibold text-[#cbd5e1] transition-all hover:bg-[rgba(255,255,255,0.1)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteBusy || deleteConfirmText.trim() !== String(deletingServer.name || "").trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 font-bold text-white transition-all hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteBusy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

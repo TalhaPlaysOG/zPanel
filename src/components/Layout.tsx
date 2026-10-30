@@ -41,6 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (path === "/api-keys") return "API Keys";
     if (path === "/settings" || path === "/admin/settings") return "Settings";
     if (path === "/playit") return "Playit Tunnels";
+    if (path === "/cloudflare") return "Cloudflare Tunnel";
     return "";
   };
 

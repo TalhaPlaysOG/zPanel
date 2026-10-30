@@ -581,21 +581,62 @@ setup_cloudflare_tunnel() {
     # Never expose token through shell tracing
     set +x
 
-    # Step 2: Ask for the Tunnel Token
+    # Step 2: Ask for the Tunnel Token (accept a raw token or a full command)
     print_banner
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL SETUP${NC}\n"
     log_divider
     echo ""
     echo "  Paste your Cloudflare Tunnel token below."
-    echo "  Get your token from your existing tunnel in the Cloudflare Zero Trust dashboard."
+    echo "  You can also paste the full command from the Cloudflare dashboard, e.g.:"
+    echo "    sudo cloudflared service install eyJhIjoi..."
     echo ""
-    echo -ne "  ${BOLD}Tunnel Token:${NC} "
-    read -r TUNNEL_TOKEN
+    echo "  (Enter 0 to return to Main Menu)"
+    echo ""
+    echo -ne "  ${BOLD}Tunnel Token or Command [or 0 to return]:${NC} "
+    read -r TUNNEL_INPUT
 
     # Validate that the input is not empty
-    TUNNEL_TOKEN="$(echo "$TUNNEL_TOKEN" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    if [ -z "$TUNNEL_TOKEN" ]; then
+    TUNNEL_INPUT="$(printf '%s' "$TUNNEL_INPUT" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ "$TUNNEL_INPUT" = "0" ]; then
+        log_info "Returning to main menu..."
+        CF_CANCELLED=1
+        return 0
+    fi
+    if [ -z "$TUNNEL_INPUT" ]; then
         log_error "Tunnel token cannot be empty."
+        return 1
+    fi
+
+    # Accept either a raw token or a full `cloudflared service install TOKEN`
+    # command. Parse the arguments directly (never eval / bash -c).
+    TUNNEL_TOKEN=""
+    if [[ "$TUNNEL_INPUT" == *"cloudflared"* && "$TUNNEL_INPUT" == *"install"* ]]; then
+        read -r -a CF_PARTS <<< "$TUNNEL_INPUT"
+        for ((i=0; i<${#CF_PARTS[@]}; i++)); do
+            if [ "${CF_PARTS[$i]}" = "install" ]; then
+                TUNNEL_TOKEN="${CF_PARTS[$((i+1))]:-}"
+                break
+            fi
+        done
+        if [ -z "$TUNNEL_TOKEN" ]; then
+            log_error "Could not find a token after 'install' in the command."
+            return 1
+        fi
+    elif [[ "$TUNNEL_INPUT" =~ [[:space:]] ]]; then
+        log_error "Invalid input. Paste only the token, or the full 'cloudflared service install ...' command."
+        return 1
+    else
+        TUNNEL_TOKEN="$TUNNEL_INPUT"
+    fi
+
+    # Strip surrounding quotes that are sometimes copied along with the token.
+    TUNNEL_TOKEN="${TUNNEL_TOKEN%\"}"; TUNNEL_TOKEN="${TUNNEL_TOKEN#\"}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN%\'}"; TUNNEL_TOKEN="${TUNNEL_TOKEN#\'}"
+
+    # Cloudflare tunnel tokens are base64url/JWT-style strings. Reject anything
+    # containing shell metacharacters or whitespace.
+    if [[ ! "$TUNNEL_TOKEN" =~ ^[A-Za-z0-9+/=_.-]{20,4096}$ ]]; then
+        log_error "That does not look like a valid Cloudflare Tunnel token."
         return 1
     fi
 
@@ -603,25 +644,54 @@ setup_cloudflare_tunnel() {
     log_step "Configuring Cloudflare Tunnel service..."
     check_privileges
 
-    # Handle an existing cloudflared service without creating duplicate services
-    if systemctl list-unit-files 2>/dev/null | grep -q "^cloudflared\.service" || [ -f /etc/systemd/system/cloudflared.service ] || [ -f /lib/systemd/system/cloudflared.service ]; then
-        log_info "Existing cloudflared service detected. Safely removing old service..."
-        $SUDO systemctl stop cloudflared 2>/dev/null || true
-        $SUDO cloudflared service uninstall 2>/dev/null || true
-        $SUDO rm -f /etc/systemd/system/cloudflared.service /etc/systemd/system/multi-user.target.wants/cloudflared.service 2>/dev/null || true
-        $SUDO systemctl daemon-reload 2>/dev/null || true
+    local CLOUDFLARED_BIN
+    CLOUDFLARED_BIN="$(command -v cloudflared 2>/dev/null || true)"
+    if [ -z "$CLOUDFLARED_BIN" ]; then
+        log_error "cloudflared binary not found. Please install it first."
+        return 1
     fi
 
-    # Execute official cloudflared service install safely without printing or logging the token
-    local INSTALL_OUT
-    INSTALL_OUT=$($SUDO cloudflared service install "$TUNNEL_TOKEN" 2>&1)
-    local INSTALL_CODE=$?
+    # Handle an existing cloudflared service without creating duplicate
+    # services: stop it, then rewrite its configuration in place.
+    if systemctl list-unit-files 2>/dev/null | grep -q "^cloudflared\.service" || [ -f /etc/systemd/system/cloudflared.service ]; then
+        log_info "Existing cloudflared service detected. Reusing it with the new token..."
+        $SUDO systemctl stop cloudflared 2>/dev/null || true
+    fi
 
-    if [ $INSTALL_CODE -ne 0 ]; then
-        local REDACTED_ERR
-        REDACTED_ERR=$(echo "$INSTALL_OUT" | sed "s|${TUNNEL_TOKEN}|[REDACTED_TOKEN]|g")
-        log_error "Failed to install cloudflared service."
-        [ -n "$REDACTED_ERR" ] && echo -e "  ${RED}${REDACTED_ERR}${NC}"
+    # Store the token in a root-only file. The token is passed via stdin, so it
+    # never appears in the process list, shell history or logs.
+    if ! $SUDO mkdir -p -m 0700 /etc/cloudflared; then
+        log_error "Failed to create /etc/cloudflared"
+        return 1
+    fi
+    if ! printf '%s' "$TUNNEL_TOKEN" | $SUDO tee /etc/cloudflared/token >/dev/null; then
+        log_error "Failed to write /etc/cloudflared/token"
+        return 1
+    fi
+    $SUDO chmod 600 /etc/cloudflared/token
+    $SUDO chown root:root /etc/cloudflared/token 2>/dev/null || true
+
+    # Write a single systemd unit that reads the token from the protected file.
+    local UNIT_FILE="/etc/systemd/system/cloudflared.service"
+    if ! $SUDO tee "$UNIT_FILE" >/dev/null <<EOF
+[Unit]
+Description=Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+TimeoutStartSec=0
+ExecStart=${CLOUDFLARED_BIN} --no-autoupdate tunnel run --token-file /etc/cloudflared/token
+Restart=on-failure
+RestartSec=5s
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    then
+        log_error "Failed to write $UNIT_FILE"
         return 1
     fi
 
@@ -685,13 +755,18 @@ setup_cloudflare_tunnel() {
         log_error "Cloudflare Tunnel failed to connect."
         [ -n "$CLEAN_MSG" ] && echo -e "  ${RED}${CLEAN_MSG}${NC}"
         echo ""
-        echo -ne "  ${YELLOW}Would you like to retry? [Y/n]:${NC} "
+        echo -e "    ${BOLD}[1]${NC} Retry Cloudflare Tunnel setup"
+        echo -e "    ${BOLD}[0]${NC} Back to Main Menu"
+        echo ""
+        log_divider
+        echo -ne "  Choose an option [0-1]: "
         read -r RETRY_INPUT
-        if [[ ! "$RETRY_INPUT" =~ ^[Nn]$ ]]; then
+        if [ "$RETRY_INPUT" = "1" ]; then
             setup_cloudflare_tunnel
             return $?
         else
-            return 1
+            CF_CANCELLED=1
+            return 0
         fi
     fi
 
@@ -710,6 +785,12 @@ cf_check_status() {
         echo -e "  ${BOLD}Installation${NC}   : ${GREEN}Completed${NC} ($(cloudflared --version 2>/dev/null | awk '{print $3}' | head -1))"
     else
         echo -e "  ${BOLD}Installation${NC}   : ${RED}Not Installed${NC}"
+    fi
+
+    if [ -f /etc/cloudflared/token ]; then
+        echo -e "  ${BOLD}Token${NC}          : ${GREEN}Configured${NC} (/etc/cloudflared/token, mode 600)"
+    else
+        echo -e "  ${BOLD}Token${NC}          : ${RED}Not Configured${NC}"
     fi
 
     local SVC_ACTIVE=false
@@ -759,10 +840,10 @@ cf_reconnect_tunnel() {
 
     echo -e "    ${BOLD}[1]${NC} Restart existing service and reconnect"
     echo -e "    ${BOLD}[2]${NC} Update tunnel token and reconnect"
-    echo -e "    ${BOLD}[3]${NC} Cancel"
+    echo -e "    ${BOLD}[0]${NC} Back to Main Menu"
     echo ""
     log_divider
-    echo -ne "  Choose an option [1-3]: "
+    echo -ne "  Choose an option [0-2]: "
     read -r RECONN_CHOICE
 
     case "$RECONN_CHOICE" in
@@ -781,9 +862,12 @@ cf_reconnect_tunnel() {
         2)
             setup_cloudflare_tunnel
             ;;
-        *)
-            log_info "Operation cancelled."
+        0)
+            CF_RETURN_MAIN=1
             return 0
+            ;;
+        *)
+            log_error "Invalid selection. Please choose 0, 1 or 2."
             ;;
     esac
 }
@@ -791,40 +875,64 @@ cf_reconnect_tunnel() {
 # Step 4: Return to the Main Menu
 show_cloudflare_menu() {
     while true; do
+        local CF_INSTALL="${RED}Not Installed${NC}"
+        local CF_SVC="${RED}Stopped${NC}"
+        local CF_BOOT="${YELLOW}Disabled${NC}"
+        local CF_TOKEN="${RED}Not Configured${NC}"
+
+        if command -v cloudflared &>/dev/null; then
+            CF_INSTALL="${GREEN}Installed${NC}"
+        fi
+        if systemctl is-active --quiet cloudflared 2>/dev/null; then
+            CF_SVC="${GREEN}Running${NC}"
+        fi
+        if systemctl is-enabled --quiet cloudflared 2>/dev/null; then
+            CF_BOOT="${GREEN}Enabled${NC}"
+        fi
+        if [ -f /etc/cloudflared/token ]; then
+            CF_TOKEN="${GREEN}Configured${NC}"
+        fi
+
         print_banner
         echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL${NC}\n"
         log_divider
         echo ""
-        printf "    %-16s : %s\n" "Installation" "${GREEN}Completed${NC}"
-        printf "    %-16s : %s\n" "Service" "${GREEN}Running${NC}"
-        printf "    %-16s : %s\n" "Auto Startup" "${GREEN}Enabled${NC}"
+        printf "    %-16s : %b\n" "Installation" "$CF_INSTALL"
+        printf "    %-16s : %b\n" "Service" "$CF_SVC"
+        printf "    %-16s : %b\n" "Auto Startup" "$CF_BOOT"
+        printf "    %-16s : %b\n" "Token" "$CF_TOKEN"
         echo ""
         log_divider
         echo ""
-        echo -e "    ${BOLD}[1]${NC} Back to Main Menu"
-        echo -e "    ${BOLD}[2]${NC} Check Status"
-        echo -e "    ${BOLD}[3]${NC} Reconnect Tunnel"
+        echo -e "    ${BOLD}[1]${NC} Check Status"
+        echo -e "    ${BOLD}[2]${NC} Reconnect Tunnel"
+        echo -e "    ${BOLD}[0]${NC} Back to Main Menu"
         echo ""
         log_divider
-        echo -ne "  Choose an option: "
+        echo -ne "  Choose an option [0-2]: "
         read -r CF_OPTION
 
         case "$CF_OPTION" in
             1)
-                return 0
-                ;;
-            2)
                 cf_check_status
                 echo ""
                 read -p "  Press Enter to continue..."
                 ;;
-            3)
+            2)
+                CF_RETURN_MAIN=0
                 cf_reconnect_tunnel
                 echo ""
+                if [ "${CF_RETURN_MAIN:-0}" = "1" ]; then
+                    CF_RETURN_MAIN=0
+                    return 0
+                fi
                 read -p "  Press Enter to continue..."
                 ;;
+            0)
+                return 0
+                ;;
             *)
-                log_error "Invalid selection. Please choose an option from 1 to 3."
+                log_error "Invalid selection. Please choose 0, 1 or 2."
                 sleep 1
                 ;;
         esac
@@ -845,10 +953,10 @@ cloudflare_tunnel_option() {
         echo ""
         echo -e "    ${BOLD}[1]${NC} Open Cloudflare Tunnel Menu (Status / Reconnect)"
         echo -e "    ${BOLD}[2]${NC} Update Tunnel Token & Reconnect"
-        echo -e "    ${BOLD}[3]${NC} Back to Main Menu"
+        echo -e "    ${BOLD}[0]${NC} Back to Main Menu"
         echo ""
         log_divider
-        echo -ne "  Choose an option [1-3]: "
+        echo -ne "  Choose an option [0-2]: "
         read -r CF_EX_CHOICE
         case "$CF_EX_CHOICE" in
             1)
@@ -858,8 +966,11 @@ cloudflare_tunnel_option() {
             2)
                 # Proceed to token setup
                 ;;
-            *)
+            0)
                 return 0
+                ;;
+            *)
+                log_error "Invalid selection. Please choose 0, 1 or 2."
                 ;;
         esac
     fi
@@ -872,10 +983,15 @@ cloudflare_tunnel_option() {
     fi
 
     # Step 2 & Step 3: Ask for token and connect automatically
+    CF_CANCELLED=0
     if ! setup_cloudflare_tunnel; then
         echo ""
         read -p "  Press Enter to return to main menu..."
         return 1
+    fi
+
+    if [ "${CF_CANCELLED:-0}" = "1" ]; then
+        return 0
     fi
 
     # Step 4: Show menu
@@ -1002,7 +1118,81 @@ restart_zpanel() {
 }
 
 # ─────────────────────────────────────────────
-#  MAIN INTERACTIVE MENU LOOP (1-6)
+#  [6] UNINSTALL zPanel
+# ─────────────────────────────────────────────
+uninstall_zpanel() {
+    print_banner
+    echo -e "  ${BOLD}${RED}UNINSTALL zPanel${NC}\n"
+    log_divider
+
+    PANEL_DIR=$(find_panel_directory)
+    if [ -z "$PANEL_DIR" ]; then
+        log_error "zPanel installation was not found. Nothing to uninstall."
+        return 1
+    fi
+
+    log_warning "This will permanently remove zPanel from: ${BOLD}$PANEL_DIR${NC}"
+    echo ""
+    echo -e "  ${RED}${BOLD}⚠  WARNING: This action is irreversible!${NC}"
+    echo -e "  ${RED}All panel data, server configurations, and user accounts will be deleted.${NC}"
+    echo ""
+
+    read -p "  Are you sure you want to uninstall zPanel? (y/N): " CONFIRM_1
+    if [[ ! "$CONFIRM_1" =~ ^[Yy]$ ]]; then
+        log_info "Uninstall cancelled."
+        return 0
+    fi
+
+    read -p "  Type 'UNINSTALL' to confirm: " CONFIRM_2
+    if [ "$CONFIRM_2" != "UNINSTALL" ]; then
+        log_info "Uninstall cancelled."
+        return 0
+    fi
+
+    echo ""
+    log_step "Stopping zPanel services..."
+
+    # Stop and remove PM2 process
+    if command -v pm2 &>/dev/null; then
+        pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
+        pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+        pm2 save 2>/dev/null || true
+        log_success "PM2 process '$PM2_APP_NAME' stopped and removed."
+    else
+        log_info "PM2 not found, skipping process cleanup."
+    fi
+
+    # Remove the panel directory
+    log_step "Removing panel files from $PANEL_DIR..."
+    if [ -d "$PANEL_DIR" ]; then
+        $SUDO rm -rf "$PANEL_DIR"
+        log_success "Panel directory removed."
+    fi
+
+    # Optionally remove PM2 startup hook
+    if command -v pm2 &>/dev/null; then
+        log_step "Removing PM2 startup hook..."
+        pm2 unstartup 2>/dev/null || true
+        pm2 save 2>/dev/null || true
+        log_success "PM2 startup hook removed."
+    fi
+
+    # Ask about optional cleanup
+    echo ""
+    read -p "  Also remove PM2 globally? (y/N): " REMOVE_PM2
+    if [[ "$REMOVE_PM2" =~ ^[Yy]$ ]]; then
+        npm uninstall -g pm2 2>/dev/null || true
+        log_success "PM2 uninstalled globally."
+    fi
+
+    echo ""
+    log_divider
+    echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely uninstalled.${NC}"
+    echo ""
+}
+
+# ─────────────────────────────────────────────
+#  MAIN INTERACTIVE MENU LOOP (0-6)
 # ─────────────────────────────────────────────
 while true; do
     print_banner
@@ -1013,11 +1203,12 @@ while true; do
     echo -e "    ${BOLD}[3]${NC} Update zPanel"
     echo -e "    ${BOLD}[4]${NC} Create Admin User"
     echo -e "    ${BOLD}[5]${NC} Restart zPanel"
-    echo -e "    ${BOLD}[6]${NC} Exit"
+    echo -e "    ${BOLD}${RED}[6]${NC} ${RED}Uninstall zPanel${NC}"
+    echo -e "    ${BOLD}[0]${NC} Exit"
     echo ""
     log_divider
     echo -e "  \c"
-    read -p "Choose an option [1-6]: " MAIN_CHOICE
+    read -p "Choose an option [0-6]: " MAIN_CHOICE
 
     case "$MAIN_CHOICE" in
         1)
@@ -1044,12 +1235,17 @@ while true; do
             read -p "  Press Enter to return to main menu..."
             ;;
         6)
+            uninstall_zpanel
+            echo ""
+            read -p "  Press Enter to return to main menu..."
+            ;;
+        0)
             echo ""
             echo -e "  ${CYAN}Exiting zPanel installer. Have a great day!${NC}\n"
             exit 0
             ;;
         *)
-            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 1 and 6."
+            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 0 and 6."
             sleep 1
             ;;
     esac

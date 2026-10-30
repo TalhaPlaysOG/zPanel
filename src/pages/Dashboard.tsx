@@ -157,14 +157,17 @@ export default function Dashboard() {
   const stoppedServers = totalServers - runningServers;
 
   const cpuPercent = stats ? Math.round(stats.cpuUsage) : 0;
-  const totalMemGB = stats ? (stats.totalMemory / (1024 * 1024 * 1024)).toFixed(1) : "0";
-  const usedMemGB = stats
-    ? ((stats.totalMemory - stats.freeMemory) / (1024 * 1024 * 1024)).toFixed(1)
+  const totalMem = stats?.totalMemory ?? 0;
+  const freeMem = stats?.freeMemory ?? 0;
+  const totalMemGB = totalMem > 0 ? (totalMem / (1024 * 1024 * 1024)).toFixed(1) : "0";
+  const usedMemGB = totalMem > 0
+    ? ((totalMem - freeMem) / (1024 * 1024 * 1024)).toFixed(1)
     : "0";
   const memPercent =
-    stats && stats.totalMemory > 0
-      ? Math.round(((stats.totalMemory - stats.freeMemory) / stats.totalMemory) * 100)
+    totalMem > 0
+      ? Math.round(((totalMem - freeMem) / totalMem) * 100)
       : 0;
+
 
   return (
     <div

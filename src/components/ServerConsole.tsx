@@ -156,7 +156,12 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sockRef = useRef<Socket | null>(null);
+  const autoScrollRef = useRef(autoScroll);
   const { token } = useAuth();
+
+  useEffect(() => {
+    autoScrollRef.current = autoScroll;
+  }, [autoScroll]);
 
   // Synchronize server prop updates
   useEffect(() => {
@@ -195,10 +200,11 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
     return () => clearInterval(interval);
   }, [startedAt, status]);
 
-  // Socket Connection for live logs
+  // Socket Connection for live logs and lifecycle status
   useEffect(() => {
     if (!token || !serverId) return;
 
+    let disposed = false;
     const socket: Socket = io({
       auth: { token },
       reconnectionAttempts: 15,
@@ -207,36 +213,126 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
     });
     sockRef.current = socket;
 
+    const pushSystem = (message: string) => {
+      if (disposed) return;
+      setLogs((prev) => {
+        if (prev[prev.length - 1] === message) return prev;
+        const next = [...prev, message];
+        return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+      });
+    };
+
+    const appendIncoming = (incoming: string[]) => {
+      if (disposed || incoming.length === 0) return;
+      setLogs((prev) => {
+        const next = [...prev, ...incoming];
+        return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+      });
+      if (!autoScrollRef.current) {
+        setUnreadCount((c) => c + incoming.length);
+      }
+    };
+
     socket.on("connect", () => {
-      socket.emit("joinServer", serverId);
-      setLogs((p) => [...p, "[System] Live terminal session established."]);
+      socket.emit("joinServer", serverId, (response: any) => {
+        if (response && response.success === false) {
+          pushSystem(`[System] ${response.error || "Unable to join server console."}`);
+        } else {
+          pushSystem("[System] Live terminal session established.");
+        }
+      });
+    });
+
+    socket.on("connect_error", (err: Error) => {
+      pushSystem(`[System] Connection error: ${err.message}`);
+    });
+
+    socket.on("logs_history", (payload: any) => {
+      const incoming = Array.isArray(payload?.logs)
+        ? payload.logs.filter(
+            (line: any) => typeof line === "string" && line.trim()
+          )
+        : [];
+      if (disposed) return;
+      setLogs((prev) => {
+        // History replaces stale local content, but never hides messages that
+        // arrived while the join handshake was in flight.
+        if (incoming.length === 0) return prev;
+        const systemOnly = prev.every((line) => line.startsWith("[System]"));
+        const merged = systemOnly ? [...incoming, ...prev] : incoming;
+        return merged.slice(-MAX_LOG_LINES);
+      });
+      setUnreadCount(0);
     });
 
     socket.on("log", (data: string) => {
       if (typeof data !== "string") return;
-      const lines = data.split(/\r?\n/).filter((l) => l.trim());
+      const lines = data
+        .split(/\r?\n/)
+        .map(stripAnsi)
+        .filter((l) => l.trim());
+      appendIncoming(lines);
+    });
 
-      setLogs((prev) => {
-        const next = [...prev, ...lines];
-        return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
-      });
+    socket.on("server_status", (payload: any) => {
+      if (!payload || (payload.id && payload.id !== serverId)) return;
+      if (payload.status) setStatus(payload.status);
+      setStartedAt(payload.startedAt ?? null);
+      if (payload.error) {
+        pushSystem(`[Error] ${payload.error}`);
+      }
+    });
 
-      if (!autoScroll) {
-        setUnreadCount((c) => c + lines.length);
+    socket.on("server_deleted", (payload: any) => {
+      if (payload?.id && payload.id !== serverId) return;
+      pushSystem("[System] This server has been deleted.");
+      setStatus("offline");
+      setStartedAt(null);
+    });
+
+    socket.on("clear_logs", () => {
+      if (!disposed) {
+        setLogs([]);
+        setUnreadCount(0);
       }
     });
 
     socket.on("disconnect", (reason: string) => {
-      setLogs((p) => [...p, `[System] Terminal disconnected: ${reason}`]);
+      pushSystem(`[System] Terminal disconnected: ${reason}`);
     });
 
     return () => {
+      disposed = true;
       socket.emit("leaveServer", serverId);
       socket.removeAllListeners();
       socket.disconnect();
-      sockRef.current = null;
+      if (sockRef.current === socket) sockRef.current = null;
     };
-  }, [serverId, token, autoScroll]);
+  }, [serverId, token]);
+
+  // REST history fallback in case the socket cannot be established.
+  useEffect(() => {
+    if (!serverId) return;
+    let alive = true;
+    axios
+      .get(`/api/servers/${serverId}/logs`, { params: { lines: 300 } })
+      .then(({ data }) => {
+        if (!alive) return;
+        const incoming = Array.isArray(data?.logs)
+          ? data.logs.filter(
+              (line: any) => typeof line === "string" && line.trim()
+            )
+          : [];
+        if (incoming.length === 0) return;
+        setLogs((prev) => (prev.length > 0 ? prev : incoming.slice(-MAX_LOG_LINES)));
+      })
+      .catch(() => {
+        /* socket history remains the primary source */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [serverId]);
 
   // Polling Server Vitals and Process Status
   useEffect(() => {
@@ -307,7 +403,7 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
     setUnreadCount(0);
   }, []);
 
-  // Send Command
+  // Send Command (socket first, REST fallback when the socket is unavailable)
   const sendCommand = useCallback(
     async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
@@ -319,10 +415,34 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
       setHistIdx(-1);
       setLogs((p) => [...p, `> ${cmd}`]);
 
+      const socket = sockRef.current;
+      if (socket && socket.connected) {
+        const response = await new Promise<any>((resolve) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve({ success: false, error: "Command timed out." });
+          }, 5000);
+          socket.emit("command", { serverId, command: cmd }, (result: any) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(result || { success: false, error: "No response from server." });
+          });
+        });
+
+        if (!response.success) {
+          setLogs((p) => [...p, `[Error] ${response.error || "Command failed."}`]);
+        }
+        return;
+      }
+
       try {
         await axios.post(`/api/servers/${serverId}/command`, { command: cmd });
       } catch (err: any) {
-        setLogs((p) => [...p, `[Error] Command failed: ${err.message}`]);
+        const message = err?.response?.data?.error || err.message;
+        setLogs((p) => [...p, `[Error] Command failed: ${message}`]);
       }
     },
     [command, serverId]
@@ -365,6 +485,15 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
 
   const isOnline = status === "online";
   const startInfo = formatStartTime(startedAt);
+  const statusMeta: Record<string, { label: string; dot: string; box: string }> = {
+    online: { label: "Online", dot: "bg-theme-500", box: "bg-theme-500/10 border-theme-500/30 text-theme-300" },
+    starting: { label: "Starting", dot: "bg-amber-400 animate-pulse", box: "bg-amber-500/10 border-amber-500/30 text-amber-300" },
+    downloading: { label: "Downloading", dot: "bg-sky-400 animate-pulse", box: "bg-sky-500/10 border-sky-500/30 text-sky-300" },
+    stopping: { label: "Stopping", dot: "bg-orange-400 animate-pulse", box: "bg-orange-500/10 border-orange-500/30 text-orange-300" },
+    error: { label: "Error", dot: "bg-rose-500", box: "bg-rose-500/10 border-rose-500/30 text-rose-300" },
+    offline: { label: "Offline", dot: "bg-slate-500", box: "bg-white/5 border-white/10 text-slate-400" },
+  };
+  const statusInfo = statusMeta[status] || statusMeta.offline;
 
   // Render log line with crisp white body text and theme colored tags/prefixes
   const renderLogLine = (raw: string, index: number) => {
@@ -501,7 +630,7 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
                 ) : (
                   <div className="flex items-center gap-1.5 text-slate-500">
                     <Clock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                    <span>Uptime: 00:00:00 (Offline)</span>
+                    <span>Uptime: 00:00:00 ({statusInfo.label})</span>
                   </div>
                 )}
 
@@ -519,24 +648,19 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
 
           {/* Right: Clean Terminal Status & Clear Buffer */}
           <div className="flex items-center gap-2 ml-auto shrink-0">
-            {isOnline ? (
-              <div 
-                className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-theme-500/10 border border-theme-500/30 text-theme-300 font-mono text-[11px] shadow-sm shadow-theme-500/15"
-                title={startInfo.full}
-              >
-                <span className="relative flex h-2 w-2">
+            <div
+              className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border font-mono text-[11px] ${statusInfo.box}`}
+              title={isOnline ? startInfo.full : statusInfo.label}
+            >
+              <span className="relative flex h-2 w-2">
+                {isOnline && (
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-theme-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-theme-500"></span>
-                </span>
-                <span className="font-bold text-theme-300">Online</span>
-                <span className="text-theme-400/80 text-[10px] hidden xs:inline">• {uptime}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-400 font-mono text-[11px]">
-                <span className="inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
-                <span>Stopped</span>
-              </div>
-            )}
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${statusInfo.dot}`}></span>
+              </span>
+              <span className="font-bold">{statusInfo.label}</span>
+              {isOnline && <span className="text-theme-400/80 text-[10px] hidden xs:inline">• {uptime}</span>}
+            </div>
 
             {/* Clear Console Buffer button */}
             <button
@@ -621,7 +745,7 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="Enter server command..."
+              placeholder={isOnline ? "Enter server command..." : `Server is ${statusInfo.label.toLowerCase()} — start it to send commands`}
               spellCheck="false"
               autoComplete="off"
               className="w-full bg-transparent py-1 text-sm sm:text-base font-mono text-white focus:outline-none placeholder:text-theme-400/40 caret-theme-400"
@@ -629,7 +753,7 @@ export default function ServerConsole({ serverId, server }: ServerConsoleProps) 
           </div>
           <button
             type="submit"
-            disabled={!command.trim()}
+            disabled={!command.trim() || !isOnline}
             className="min-h-[46px] px-5 sm:px-6 py-2 rounded-xl font-mono text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-lg shadow-purple-600/30 shrink-0 flex items-center gap-2"
           >
             <Send className="w-4 h-4" />

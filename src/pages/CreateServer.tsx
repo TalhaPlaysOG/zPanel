@@ -27,6 +27,8 @@ const CPU_MAP: Record<number, number> = { 1: 100, 2: 100, 4: 150, 8: 200, 16: 30
 
 const MINECRAFT_SOFTWARE = [
   { id: 'paper', name: 'Paper', desc: 'High Performance', icon: Zap },
+  { id: 'purpur', name: 'Purpur', desc: 'Paper + Extra Features', icon: Sparkles },
+  { id: 'vanilla', name: 'Vanilla', desc: 'Official Minecraft', icon: Server },
   { id: 'spigot', name: 'Spigot', desc: 'Classic Plugins', icon: Wrench },
   { id: 'fabric', name: 'Fabric', desc: 'Lightweight Mods', icon: Feather },
   { id: 'forge', name: 'Forge', desc: 'Classic Modpack', icon: Wrench },

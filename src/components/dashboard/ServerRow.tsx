@@ -5,10 +5,12 @@ import { Server, ChevronRight } from "lucide-react";
 import { ServerSummary, ServerStatus } from "../../types/dashboard";
 import { useRipple, RippleLayer, EASE_OUT_EXPO } from "./Shared";
 
-const STATUS_MAP: Record<ServerStatus, { dot: string; label: string; text: string }> = {
+const STATUS_MAP: Record<string, { dot: string; label: string; text: string }> = {
   online: { dot: "bg-theme-500 shadow-[0_0_12px_rgba(var(--theme-rgb-500),0.8)]", label: "text-theme-500", text: "Online" },
-  starting: { dot: "bg-theme-500 shadow-[0_0_12px_rgba(var(--theme-rgb-500),0.8)]", label: "text-theme-500", text: "Starting" },
-  error: { dot: "bg-theme-400 shadow-[0_0_12px_rgba(251,113,133,0.8)]", label: "text-theme-400", text: "Error" },
+  starting: { dot: "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.7)] animate-pulse", label: "text-amber-400", text: "Starting" },
+  downloading: { dot: "bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.7)] animate-pulse", label: "text-sky-400", text: "Downloading" },
+  stopping: { dot: "bg-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse", label: "text-orange-400", text: "Stopping" },
+  error: { dot: "bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.8)]", label: "text-rose-400", text: "Error" },
   offline: { dot: "bg-zinc-500", label: "text-muted-foreground", text: "Offline" },
 };
 

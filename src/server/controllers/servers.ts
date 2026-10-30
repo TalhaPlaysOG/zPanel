@@ -8,10 +8,13 @@ import {
   deleteServerRuntime,
   getServerRuntimeStatus,
   getServerRuntimeStats,
+  getServerRuntimeLogs,
   sendServerRuntimeCommand,
-  attachServerRuntimeSocket
+  attachServerRuntimeSocket,
+  resolveRuntimeType
 } from "../services/runtime.js";
-import { getLocalProcessInfo } from "../services/local.js";
+import { getLocalProcessInfo, clearLocalServerRuntime } from "../services/local.js";
+import { panelEvents } from "../events.js";
 import { createSftpUser, deleteSftpUser } from "../services/sftp.js";
 import crypto from "crypto";
 import fs from "fs-extra";
@@ -20,31 +23,70 @@ import { ZipArchive } from "archiver";
 import extract from "extract-zip";
 import { extractArchive } from "../utils/extract.js";
 
+const SERVER_ID_RE = /^[a-zA-Z0-9-]{6,64}$/;
+
+const emitServerStatus = (req: Request, server: any) => {
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`server_${server.id}`).emit("server_status", {
+      id: server.id,
+      status: server.status,
+      running: ["starting", "online", "stopping"].includes(server.status),
+      startedAt: server.startedAt || null,
+      readyAt: server.readyAt || null,
+      error: server.lastError || null,
+    });
+  }
+};
+
+/**
+ * Ask the runtime for the real process state and copy it onto the server
+ * record. A server is only "online" once the Minecraft process has reported
+ * that it finished starting.
+ */
+const applyRuntimeStatus = async (server: any) => {
+  let status: any = null;
+  try {
+    status = await getServerRuntimeStatus(server);
+  } catch (err: any) {
+    console.warn(`[Status] Failed to read runtime status for ${server.id}: ${err.message}`);
+  }
+
+  const running = !!status?.State?.Running;
+  const lifecycle = status?.State?.Status;
+
+  if (!status) {
+    server.status = server.status === "error" ? "error" : "offline";
+    server.startedAt = null;
+    server.readyAt = null;
+  } else {
+    server.status = lifecycle || (running ? "starting" : "offline");
+    server.startedAt = running ? status?.State?.StartedAt || server.startedAt || null : null;
+    server.readyAt = running ? status?.State?.ReadyAt || null : null;
+    server.lastError = status?.State?.Error || null;
+  }
+
+  if ((await resolveRuntimeType(server)) === "local") {
+    const info = getLocalProcessInfo(server.id);
+    if (info) {
+      server.pid = info.pid;
+      server.jarPath = info.jarPath;
+      server.logPath = info.logPath;
+    }
+  }
+
+  return server;
+};
+
 export const getServers = async (req: Request, res: Response) => {
   const user = (req as any).user;
   const servers = await readJSON("servers.json") || [];
-  
+
   // Filter for normal users
   const userServers = user.role === "admin" || user.role === "owner" ? servers : servers.filter((s: any) => s.owner === user.id);
 
-  // Update statuses
-  const updatedServers = await Promise.all(userServers.map(async (server: any) => {
-    if (server.containerId) {
-      const status = await getServerRuntimeStatus(server);
-      const isRunning = !!status?.State?.Running;
-      server.status = isRunning ? "online" : "offline";
-      server.startedAt = isRunning ? (status?.State?.StartedAt || server.startedAt || new Date().toISOString()) : null;
-      if (server.runtimeType === 'local') {
-          const info = getLocalProcessInfo(server.id);
-          if (info) {
-              server.pid = info.pid;
-              server.jarPath = info.jarPath;
-              server.logPath = info.logPath;
-          }
-      }
-    }
-    return server;
-  }));
+  // Update statuses from the actual runtime state.
+  const updatedServers = await Promise.all(userServers.map((server: any) => applyRuntimeStatus(server)));
 
   res.json(updatedServers);
 };
@@ -62,18 +104,7 @@ export const getServer = async (req: Request, res: Response) => {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const status = await getServerRuntimeStatus(server);
-  const isRunning = !!status?.State?.Running;
-  server.status = isRunning ? "online" : "offline";
-  server.startedAt = isRunning ? (status?.State?.StartedAt || server.startedAt || new Date().toISOString()) : null;
-  if (server.runtimeType === 'local') {
-      const info = getLocalProcessInfo(server.id);
-      if (info) {
-          server.pid = info.pid;
-          server.jarPath = info.jarPath;
-          server.logPath = info.logPath;
-      }
-  }
+  await applyRuntimeStatus(server);
   res.json(server);
 };
 
@@ -90,9 +121,9 @@ export const getServerStats = async (req: Request, res: Response) => {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const status = await getServerRuntimeStatus(server);
-  const isRunning = !!status?.State?.Running;
-  const startedAt = isRunning ? (status?.State?.StartedAt || server.startedAt || null) : null;
+  await applyRuntimeStatus(server);
+  const isRunning = ["starting", "online", "stopping"].includes(server.status);
+  const startedAt = isRunning ? server.startedAt || null : null;
   let uptimeSeconds = 0;
   if (isRunning && startedAt) {
     const startedMs = new Date(startedAt).getTime();
@@ -101,33 +132,40 @@ export const getServerStats = async (req: Request, res: Response) => {
     }
   }
 
-  if (server.containerId) {
-    const stats = await getServerRuntimeStats(server);
-    res.json({
-      ...stats,
-      isRunning,
-      status: isRunning ? "online" : "offline",
-      startedAt,
-      uptimeSeconds,
-      limitRam: server.ram ? server.ram * 1024 : 1024,
-      limitCpu: server.cpu || 100,
-      limitDisk: server.disk || 10
-    });
-  } else {
-    res.json({
-      cpu: 0,
-      ram: 0,
-      disk: 0,
-      isRunning: false,
-      status: "offline",
-      startedAt: null,
-      uptimeSeconds: 0,
-      limitRam: server.ram ? server.ram * 1024 : 1024,
-      limitCpu: server.cpu || 100,
-      limitDisk: server.disk || 10
-    });
-  }
+  const stats = await getServerRuntimeStats(server).catch(() => null);
+  res.json({
+    ...(stats || { cpu: 0, ram: 0, disk: 0 }),
+    isRunning,
+    status: server.status,
+    startedAt,
+    readyAt: server.readyAt || null,
+    uptimeSeconds,
+    error: server.lastError || null,
+    limitRam: server.ram ? server.ram * 1024 : 1024,
+    limitCpu: server.cpu || 100,
+    limitDisk: server.disk || 10
+  });
 };
+
+/**
+ * Historical console logs. Uses the real Minecraft log file when available.
+ */
+export const getServerLogs = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = (req as any).user;
+  const servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+  if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const requested = Number(req.query.lines);
+  const lines = Number.isFinite(requested) ? Math.min(Math.max(requested, 20), 2000) : 300;
+  const logs = await getServerRuntimeLogs(server, lines).catch(() => "");
+  res.json({ logs: logs ? logs.split(/\r?\n/) : [] });
+};
+
 
 export const checkPort = async (req: Request, res: Response) => {
   const { port } = req.query;
@@ -159,6 +197,13 @@ export const createServer = async (req: Request, res: Response) => {
   }
 
   const id = crypto.randomUUID();
+  const requestedRuntime = runtimeType || "docker";
+  const effectiveRuntime = await resolveRuntimeType({
+    id,
+    runtimeType: requestedRuntime,
+    nodeId: nodeId || "local",
+  });
+
   const serverData = {
     id,
     name,
@@ -168,7 +213,7 @@ export const createServer = async (req: Request, res: Response) => {
     disk: disk || 10,
     port,
     ipAlias: ipAlias || "",
-    runtimeType: runtimeType || "docker",
+    runtimeType: effectiveRuntime,
     nodeId: nodeId || "local",
     type: type || "PAPER",
     version: version || "latest",
@@ -284,53 +329,111 @@ export const updateIpAlias = async (req: Request, res: Response) => {
 };
 
 export const deleteServer = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = (req as any).user;
+
+  if (!SERVER_ID_RE.test(id)) {
+    return res.status(400).json({ error: "Invalid server id" });
+  }
+
+  let servers = await readJSON("servers.json") || [];
+  const server = servers.find((s: any) => s.id === id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const isPrivileged = user.role === "admin" || user.role === "owner";
+  const isOwner = server.owner && server.owner === user.id;
+  if (!isPrivileged && !isOwner) {
+    return res.status(403).json({ error: "You do not have permission to delete this server" });
+  }
+
   try {
-    const { id } = req.params;
-    const user = (req as any).user;
-    
-    let servers = await readJSON("servers.json") || [];
-    const server = servers.find((s: any) => s.id === id);
-    
-    if (!server) {
-      return res.status(404).json({ error: "Server not found" });
+    // 1. Stop the server gracefully if it is running.
+    try {
+      const status = await getServerRuntimeStatus(server);
+      if (status?.State?.Running) {
+        await stopServerRuntime(server);
+      }
+    } catch (stopErr: any) {
+      console.warn(`[Delete] Failed to stop server ${id} before deletion: ${stopErr.message}`);
     }
 
-    if (user.role !== "admin" && user.role !== "owner") {
-      return res.status(403).json({ error: "Only admins can delete servers" });
-    }
-
-    if (server.containerId) {
+    // 2. Remove the container / local process and its stream state.
+    try {
       await deleteServerRuntime(server);
+    } catch (runtimeErr: any) {
+      console.warn(`[Delete] Runtime cleanup failed for ${id}: ${runtimeErr.message}`);
     }
-    
+    clearLocalServerRuntime(id);
+
+    // 3. Remove server files and backups.
+    const serverDir = path.join(process.cwd(), ".data", "servers", id);
+    const backupsDir = path.join(process.cwd(), ".data", "backups", id);
+    await fs.remove(serverDir);
+    await fs.remove(backupsDir);
+
+    if (await fs.pathExists(serverDir)) {
+      throw new Error("Server files could not be removed completely. Check file permissions.");
+    }
+
+    // 4. Remove associated credentials / tunnel configuration.
+    await deleteSftpUser(id).catch((e) => console.error("SFTP user deletion failed:", e));
+    try {
+      const { deleteCloudflareConfig, stopCloudflareTunnel } = await import("../services/cloudflare.js");
+      await stopCloudflareTunnel(id, server).catch(() => {});
+      await deleteCloudflareConfig(id).catch(() => {});
+    } catch (cfErr: any) {
+      console.warn(`[Delete] Cloudflare cleanup failed for ${id}: ${cfErr.message}`);
+    }
+
+    // 5. Best-effort Playit process cleanup (never touches other servers).
+    const safeName = String(server.name || id).replace(/[^a-zA-Z0-9_-]/g, "_");
+    try {
+      const { execFile } = await import("child_process");
+      execFile("npx", ["pm2", "delete", `playit_${safeName}`], () => {});
+    } catch {
+      /* ignore */
+    }
+
+    // 6. Remove the database record only after cleanup succeeded.
     servers = servers.filter((s: any) => s.id !== id);
     await writeJSON("servers.json", servers);
-    
-    // Remove files
-    const serverDir = path.join(process.cwd(), ".data", "servers", id);
-    try {
-      await fs.remove(serverDir);
-    } catch (e) {
-      console.error("Failed to remove server directory", e);
+
+    // 7. Drop any connected console sockets and notify clients.
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`server_${id}`).emit("server_deleted", { id });
+      io.in(`server_${id}`).socketsLeave(`server_${id}`);
     }
-    
-    await deleteSftpUser(id).catch(e => console.error("SFTP user deletion failed:", e));
-    
-    res.json({ success: true });
+
+    res.json({ success: true, deletedId: id });
   } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error("Delete server error:", err);
+    res.status(500).json({ error: err.message || "Failed to delete server" });
   }
 };
 
 export const startServer = async (req: Request, res: Response) => {
+  let server: any = null;
+  let servers: any[] = [];
   try {
     const { id } = req.params;
-    const servers = await readJSON("servers.json") || [];
-    
-    const server = servers.find((s: any) => s.id === id);
+    servers = await readJSON("servers.json") || [];
+
+    server = servers.find((s: any) => s.id === id);
     if (!server) {
       return res.status(404).json({ error: "Not found" });
+    }
+
+    const user = (req as any).user;
+    if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (server.suspended) {
+      return res.status(403).json({ error: "Server is suspended" });
     }
 
     if (!server.containerId) {
@@ -338,17 +441,27 @@ export const startServer = async (req: Request, res: Response) => {
       await writeJSON("servers.json", servers);
     }
 
-    if (server.suspended) {
-      return res.status(403).json({ error: "Server is suspended" });
+    // If the runtime is already running there is nothing to do. Never report
+    // "online" just because a start request was received.
+    const current = await getServerRuntimeStatus(server).catch(() => null);
+    if (current?.State?.Running) {
+      await applyRuntimeStatus(server);
+      await writeJSON("servers.json", servers);
+      emitServerStatus(req, server);
+      return res.json({
+        success: true,
+        alreadyRunning: true,
+        status: server.status,
+        startedAt: server.startedAt || null,
+      });
     }
-    
+
     // PRE-FLIGHT CHECKS
     try {
       const serverDir = path.join(process.cwd(), ".data", "servers", server.id);
-      
-      // 1. Check for stale session locks and remove them if server is stopped
-      // But wait, the prompt says: "Never delete session.lock while the server process/container is running."
-      // Since we are inside startServer, the server is supposedly stopped right now.
+
+      // 1. Check for stale session locks and remove them if server is stopped.
+      // The server is verified stopped above, so removing these is safe.
       const lockFiles = [
         path.join(serverDir, "world", "session.lock"),
         path.join(serverDir, "world_nether", "session.lock"),
@@ -363,7 +476,7 @@ export const startServer = async (req: Request, res: Response) => {
           }
         }
       }
-      
+
       // 2. Check permissions on world folder
       const worldPath = path.join(serverDir, "world");
       if (fs.existsSync(worldPath)) {
@@ -373,51 +486,92 @@ export const startServer = async (req: Request, res: Response) => {
            return res.status(500).json({ error: "Startup Diagnostic Failed: Permission denied on world folder." });
         }
       }
-      
-      // 3. Disk space
-      // Simple check (assume enough for now unless we import diskusage)
-      
     } catch (preflightErr) {
       console.error(preflightErr);
     }
 
+    server.status = "starting";
+    server.startedAt = null;
+    server.readyAt = null;
+    server.lastError = null;
+    await writeJSON("servers.json", servers);
+    emitServerStatus(req, server);
 
     try {
       const io = req.app.get("io");
       if (io) io.to(`server_${id}`).emit("clear_logs");
-      
+
       await startServerRuntime(server);
-      server.status = "online";
-      server.startedAt = new Date().toISOString();
-      await writeJSON("servers.json", servers);
     } catch (startErr: any) {
       if (startErr.statusCode === 404 || (startErr.message && startErr.message.toLowerCase().includes("no such container"))) {
         console.log(`Container missing for server ${server.id}. Recreating...`);
         server.containerId = await createServerRuntime(server);
         await startServerRuntime(server);
-        server.status = "online";
-        server.startedAt = new Date().toISOString();
-        await writeJSON("servers.json", servers);
       } else {
         throw startErr;
       }
     }
+
     await attachServerRuntimeSocket(server, server.id);
-    res.json({ success: true, startedAt: server.startedAt });
+
+    // Refresh the status from the runtime. A local Minecraft process stays in
+    // "starting" until it prints its readiness line.
+    await applyRuntimeStatus(server);
+    await writeJSON("servers.json", servers);
+    emitServerStatus(req, server);
+
+    if (server.status === "error") {
+      return res.status(500).json({
+        error: server.lastError || "Server failed to start",
+        status: server.status,
+        startedAt: server.startedAt || null,
+      });
+    }
+
+    res.json({
+      success: true,
+      status: server.status,
+      startedAt: server.startedAt || null,
+      error: server.lastError || null,
+    });
   } catch (err: any) {
     console.error("Start server error:", err);
-    res.status(500).json({ error: err.message || "Failed to start server" });
+    if (server) {
+      server.status = "error";
+      server.startedAt = null;
+      server.readyAt = null;
+      server.lastError = err.message || "Failed to start server";
+      try {
+        await writeJSON("servers.json", servers);
+        emitServerStatus(req, server);
+      } catch {
+        /* ignore persistence errors */
+      }
+    }
+    res.status(500).json({ error: err.message || "Failed to start server", status: "error" });
   }
 };
 
 export const stopServer = async (req: Request, res: Response) => {
+  let server: any = null;
+  let servers: any[] = [];
   try {
     const { id } = req.params;
-    const servers = await readJSON("servers.json") || [];
-    const server = servers.find((s: any) => s.id === id);
-    if (!server || !server.containerId) {
+    servers = await readJSON("servers.json") || [];
+    server = servers.find((s: any) => s.id === id);
+    if (!server) {
       return res.status(404).json({ error: "Not found" });
     }
+
+    const user = (req as any).user;
+    if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    server.status = "stopping";
+    await writeJSON("servers.json", servers);
+    emitServerStatus(req, server);
+
     try {
       await stopServerRuntime(server);
     } catch (stopErr: any) {
@@ -427,63 +581,140 @@ export const stopServer = async (req: Request, res: Response) => {
         throw stopErr;
       }
     }
-    server.status = "offline";
+
+    await applyRuntimeStatus(server);
+    if (server.status !== "error") {
+      server.status = "offline";
+      server.lastError = null;
+    }
     server.startedAt = null;
+    server.readyAt = null;
     await writeJSON("servers.json", servers);
-    res.json({ success: true });
+    emitServerStatus(req, server);
+    res.json({ success: true, status: server.status });
   } catch (err: any) {
     console.error("Stop server error:", err);
+    if (server) {
+      server.status = "error";
+      server.lastError = err.message || "Failed to stop server";
+      try {
+        await writeJSON("servers.json", servers);
+        emitServerStatus(req, server);
+      } catch {
+        /* ignore */
+      }
+    }
     res.status(500).json({ error: err.message || "Failed to stop server" });
   }
 };
 
 export const restartServer = async (req: Request, res: Response) => {
+  let server: any = null;
+  let servers: any[] = [];
   try {
     const { id } = req.params;
-    const servers = await readJSON("servers.json") || [];
-    const server = servers.find((s: any) => s.id === id);
-    if (!server || !server.containerId) {
+    servers = await readJSON("servers.json") || [];
+    server = servers.find((s: any) => s.id === id);
+    if (!server) {
       return res.status(404).json({ error: "Not found" });
     }
+
+    const user = (req as any).user;
+    if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (server.suspended) {
+      return res.status(403).json({ error: "Server is suspended" });
+    }
+
+    if (!server.containerId) {
+      server.containerId = await createServerRuntime(server);
+      await writeJSON("servers.json", servers);
+    }
+
+    server.status = "starting";
+    server.startedAt = null;
+    server.readyAt = null;
+    server.lastError = null;
+    await writeJSON("servers.json", servers);
+    emitServerStatus(req, server);
+
     try {
       const io = req.app.get("io");
       if (io) io.to(`server_${id}`).emit("clear_logs");
 
       await restartServerRuntime(server);
-      server.status = "online";
-      server.startedAt = new Date().toISOString();
-      await writeJSON("servers.json", servers);
     } catch (startErr: any) {
       if (startErr.statusCode === 404 || (startErr.message && startErr.message.toLowerCase().includes("no such container"))) {
         console.log(`Container missing for server ${server.id}. Recreating...`);
         server.containerId = await createServerRuntime(server);
         await startServerRuntime(server);
-        server.status = "online";
-        server.startedAt = new Date().toISOString();
-        await writeJSON("servers.json", servers);
       } else {
         throw startErr;
       }
     }
+
     await attachServerRuntimeSocket(server, server.id);
-    res.json({ success: true, startedAt: server.startedAt });
+    await applyRuntimeStatus(server);
+    await writeJSON("servers.json", servers);
+    emitServerStatus(req, server);
+
+    if (server.status === "error") {
+      return res.status(500).json({
+        error: server.lastError || "Server failed to restart",
+        status: server.status,
+        startedAt: server.startedAt || null,
+      });
+    }
+
+    res.json({
+      success: true,
+      status: server.status,
+      startedAt: server.startedAt || null,
+      error: server.lastError || null,
+    });
   } catch (err: any) {
     console.error("Restart server error:", err);
-    res.status(500).json({ error: err.message || "Failed to restart server" });
+    if (server) {
+      server.status = "error";
+      server.startedAt = null;
+      server.readyAt = null;
+      server.lastError = err.message || "Failed to restart server";
+      try {
+        await writeJSON("servers.json", servers);
+        emitServerStatus(req, server);
+      } catch {
+        /* ignore */
+      }
+    }
+    res.status(500).json({ error: err.message || "Failed to restart server", status: "error" });
   }
 };
 
 export const sendCommand = async (req: Request, res: Response) => {
-  
   try {
     const { id } = req.params;
     const { command } = req.body;
+    const user = (req as any).user;
+
+    if (typeof command !== "string" || !command.trim()) {
+      return res.status(400).json({ error: "Command is required" });
+    }
+    if (command.length > 2000 || /[\r\n]/.test(command)) {
+      return res.status(400).json({ error: "Invalid command" });
+    }
+
     const servers = await readJSON("servers.json") || [];
     const server = servers.find((s: any) => s.id === id);
-    if (!server || !server.containerId) {
+    if (!server) {
       return res.status(404).json({ error: "Not found" });
     }
-    await sendServerRuntimeCommand(server, command);
+    if (user.role !== "admin" && user.role !== "owner" && server.owner !== user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    await sendServerRuntimeCommand(server, command.trim());
     res.json({ success: true });
   } catch (err: any) {
     console.error("Command error:", err);
@@ -518,7 +749,7 @@ export const changeServerVersion = async (req: Request, res: Response) => {
       // Delete old container
       await deleteServerRuntime(server);
     }
-    
+
     // Automatically delete config files to avoid issues when switching versions/types
     const serverDir = path.join(process.cwd(), ".data", "servers", id);
     const filesToDelete = [
@@ -537,6 +768,33 @@ export const changeServerVersion = async (req: Request, res: Response) => {
         console.error(`Failed to delete ${file}`, e);
       }
     }
+
+    // Delete the old server JAR so the next start downloads the correct version.
+    // Check common filenames to handle software-type switches.
+    const jarNamesToDelete = ["server.jar", "purpur.jar", "paper.jar", "spigot.jar", "fabric-server.jar", "minecraft_server.jar"];
+    for (const jarName of jarNamesToDelete) {
+      const jarPath = path.join(serverDir, jarName);
+      try {
+        if (await fs.pathExists(jarPath)) {
+          await fs.remove(jarPath);
+          console.log(`[ChangeVersion] Removed old JAR: ${jarName}`);
+        }
+      } catch (e) {
+        console.warn(`[ChangeVersion] Could not remove ${jarName}:`, e);
+      }
+    }
+
+    // Also clean Forge-specific launch args so the installer re-runs on next start.
+    const forgeArgsToClean = [
+      "libraries/net/minecraftforge/forge/args.txt",
+      "user_jvm_args.txt", "unix_args.txt", "win_args.txt"
+    ];
+    for (const argsFile of forgeArgsToClean) {
+      try {
+        const argsPath = path.join(serverDir, argsFile);
+        if (await fs.pathExists(argsPath)) await fs.remove(argsPath);
+      } catch { /* ignore */ }
+    }
     
     server.version = version;
     if (type) {
@@ -554,6 +812,7 @@ export const changeServerVersion = async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // File manager basics
 export const getFiles = async (req: Request, res: Response) => {

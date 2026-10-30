@@ -23,6 +23,9 @@ export default function AdminServers() {
   const [suspendDuration, setSuspendDuration] = useState("null");
 
   const [deletingServer, setDeletingServer] = useState<any>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -75,12 +78,22 @@ export default function AdminServers() {
   };
 
   const handleDelete = async () => {
+    if (!deletingServer) return;
+    if (deleteConfirmText.trim() !== String(deletingServer.name || "").trim()) {
+      setDeleteError("Type the server name exactly to confirm deletion.");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
       await axios.delete(`/api/servers/${deletingServer.id}`);
       setDeletingServer(null);
+      setDeleteConfirmText("");
       fetchData();
-    } catch (e) {
-      alert("Failed to delete server");
+    } catch (e: any) {
+      setDeleteError(e?.response?.data?.error || e?.message || "Failed to delete server");
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -278,22 +291,58 @@ export default function AdminServers() {
       <AnimatePresence>
         {deletingServer && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[rgba(10,14,36,0.95)] border border-rose-500/30 rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl relative overflow-hidden"
+              className="bg-[rgba(10,14,36,0.95)] border border-rose-500/30 rounded-2xl p-6 sm:p-7 max-w-lg w-full shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-rose-500" />
-              
-              <h2 className="text-lg font-bold text-rose-400 mb-2">Delete Server Instance?</h2>
-              <p className="text-sm text-[#94a3b8] leading-relaxed mb-6">
-                Are you sure you want to permanently delete <strong className="text-white">{deletingServer.name}</strong>? This action cannot be undone and will purge all server files, databases, and containers.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setDeletingServer(null)} className="px-4 py-2 text-xs font-semibold text-[#94a3b8] hover:text-white">Cancel</button>
-                <button onClick={handleDelete} className="px-5 py-2 text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-xl hover:bg-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.4)]">
-                  Yes, Delete Server
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-rose-600 to-red-500" />
+              <div className="flex items-start mb-4">
+                <div className="mr-4 shrink-0 rounded-xl bg-rose-600/20 p-3 text-rose-400">
+                  <Trash2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white mb-1">Delete &ldquo;{deletingServer.name}&rdquo;?</h2>
+                  <p className="text-sm text-[#94a3b8] leading-relaxed">
+                    This permanently deletes the server, all worlds, files, backups, logs, configuration, SFTP access, and database records. The server is stopped first.
+                    <strong className="text-rose-300"> This action cannot be undone.</strong>
+                  </p>
+                </div>
+              </div>
+
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-2">
+                Type <span className="font-mono text-rose-300">{deletingServer.name}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleDelete()}
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={deletingServer.name}
+                className="w-full bg-black/60 border border-rose-500/30 focus:border-rose-500 rounded-xl px-4 py-2.5 text-white font-mono text-sm outline-none"
+              />
+
+              {deleteError && (
+                <p className="mt-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{deleteError}</p>
+              )}
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => { setDeletingServer(null); setDeleteConfirmText(""); setDeleteError(null); }}
+                  disabled={deleteBusy}
+                  className="px-4 py-2.5 text-sm font-semibold rounded-xl bg-[rgba(255,255,255,0.06)] text-[#cbd5e1] hover:bg-[rgba(255,255,255,0.1)] transition-all disabled:opacity-50"
+                >Cancel</button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteBusy || deleteConfirmText.trim() !== String(deletingServer.name || "").trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleteBusy ? "Deleting…" : "Delete permanently"}
                 </button>
               </div>
             </motion.div>

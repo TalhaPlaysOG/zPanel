@@ -5,12 +5,14 @@ const router = express.Router();
 import authRoutes from "./auth.js";
 import serverRoutes from "./servers.js";
 import systemRoutes from "./system.js";
+import cloudflareRoutes from "./cloudflare.js";
 import apiKeyRoutes from "./api-keys.js";
 import nodeRoutes from "./nodes.js";
 
 router.use("/auth", authRoutes);
 router.use("/servers", serverRoutes);
 router.use("/system", systemRoutes);
+router.use("/cloudflare", cloudflareRoutes);
 router.use("/admin/api-keys", apiKeyRoutes);
 router.use("/nodes", nodeRoutes);
 
