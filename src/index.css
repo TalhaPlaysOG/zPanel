@@ -2,59 +2,55 @@
 @import "tailwindcss";
 
 /* =============================================================================
-   PTERODACTYL DESIGN TOKENS
-   Authentic Pterodactyl Panel Theme (Charcoal / Slate / Pterodactyl Blue)
+   NEBULA DESIGN TOKENS
+   Pterodactyl Layout + Nebula Color System
    ============================================================================= */
 
 :root {
-  /* ── Core backgrounds (Pterodactyl dark palette) ── */
-  --nb-bg-deepest:  #0b0e14;
-  --nb-bg-page:     #10141d;
-  --nb-bg-sidebar:  #141824;
-  --nb-bg-card:     #181d28;
-  --nb-bg-card-alt: #1c2230;
-  --nb-bg-input:    #10141e;
-  --nb-bg-hover:    rgba(37, 99, 235, 0.08);
-  --nb-bg-active:   rgba(37, 99, 235, 0.16);
+  /* ── Core backgrounds ── */
+  --nb-bg-deepest:  #06091a;
+  --nb-bg-page:     #0a0e24;
+  --nb-bg-sidebar:  #080c1f;
+  --nb-bg-card:     #0f1535;
+  --nb-bg-card-alt: #121840;
+  --nb-bg-input:    #0c1028;
+  --nb-bg-hover:    rgba(124, 58, 237, 0.08);
+  --nb-bg-active:   rgba(124, 58, 237, 0.15);
 
-  /* ── Primary accent colors (Pterodactyl Blue) ── */
-  --nb-purple-400:  #60a5fa;
-  --nb-purple-500:  #3b82f6;
-  --nb-purple-600:  #2563eb;
-  --nb-purple-700:  #1d4ed8;
-  --nb-blue-400:    #60a5fa;
-  --nb-blue-500:    #3b82f6;
-  --nb-blue-600:    #2563eb;
-  --nb-blue-700:    #1d4ed8;
+  /* ── Nebula accent colors ── */
+  --nb-purple-400:  #a78bfa;
+  --nb-purple-500:  #8b5cf6;
+  --nb-purple-600:  #7c3aed;
+  --nb-purple-700:  #6d28d9;
   --nb-indigo-400:  #818cf8;
   --nb-indigo-500:  #6366f1;
-  --nb-cyan-400:    #38bdf8;
-  --nb-cyan-500:    #0284c7;
-  --nb-cyan-600:    #0369a1;
+  --nb-cyan-400:    #22d3ee;
+  --nb-cyan-500:    #06b6d4;
+  --nb-cyan-600:    #0891b2;
 
   /* ── Text ── */
-  --nb-text-primary:   #f3f4f6;
-  --nb-text-secondary: #9ca3af;
-  --nb-text-muted:     #6b7280;
-  --nb-text-dim:       #4b5563;
+  --nb-text-primary:   #f0f4ff;
+  --nb-text-secondary: #94a3b8;
+  --nb-text-muted:     #64748b;
+  --nb-text-dim:       #3d4f6b;
 
   /* ── Borders ── */
-  --nb-border:        #242c3f;
-  --nb-border-subtle: rgba(255, 255, 255, 0.07);
-  --nb-border-bright: rgba(37, 99, 235, 0.45);
-  --nb-border-plain:  rgba(255, 255, 255, 0.08);
+  --nb-border:        rgba(124, 58, 237, 0.18);
+  --nb-border-subtle: rgba(139, 92, 246, 0.10);
+  --nb-border-bright: rgba(139, 92, 246, 0.35);
+  --nb-border-plain:  rgba(255, 255, 255, 0.06);
 
   /* ── Status ── */
   --nb-green:  #10b981;
   --nb-red:    #ef4444;
   --nb-amber:  #f59e0b;
-  --nb-blue:   #2563eb;
+  --nb-blue:   #3b82f6;
 
   /* ── Shadows ── */
-  --nb-shadow-card:  0 4px 20px -2px rgba(0,0,0,0.5), 0 0 0 1px #242c3f;
-  --nb-shadow-glow:  0 0 30px -8px rgba(37, 99, 235, 0.35);
+  --nb-shadow-card:  0 4px 24px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(124,58,237,0.1);
+  --nb-shadow-glow:  0 0 40px -10px rgba(124,58,237,0.4);
 
-  /* ── Legacy compat ── */
+  /* ── Legacy compat (used by some components) ── */
   --bg-background: var(--nb-bg-page);
   --bg-card:       var(--nb-bg-card);
   --text-foreground: var(--nb-text-primary);
@@ -63,22 +59,8 @@
   --border-border: var(--nb-border);
   --border-border-subtle: var(--nb-border-subtle);
   --border-border-strong: var(--nb-border-bright);
-  --bg-muted: rgba(37, 99, 235, 0.06);
-  --bg-muted-hover: rgba(37, 99, 235, 0.12);
-
-  /* ── Default theme tokens (Pterodactyl Blue) ── */
-  --theme-100: #dbeafe;
-  --theme-200: #bfdbfe;
-  --theme-300: #93c5fd;
-  --theme-400: #60a5fa;
-  --theme-500: #3b82f6;
-  --theme-600: #2563eb;
-  --theme-700: #1d4ed8;
-  --theme-800: #1e40af;
-  --theme-900: #1e3a8a;
-  --theme-950: #172554;
-  --theme-rgb-500: 59, 130, 246;
-  --theme-rgb-600: 37, 99, 235;
+  --bg-muted: rgba(124, 58, 237, 0.06);
+  --bg-muted-hover: rgba(124, 58, 237, 0.12);
 }
 
 /* ── Theme mapping for Tailwind ── */
@@ -98,17 +80,17 @@
   --color-muted: var(--bg-muted);
   --color-muted-hover: var(--bg-muted-hover);
 
-  /* Pterodactyl blue accent */
-  --color-theme-100: #dbeafe;
-  --color-theme-200: #bfdbfe;
-  --color-theme-300: #93c5fd;
-  --color-theme-400: var(--nb-blue-400);
-  --color-theme-500: var(--nb-blue-500);
-  --color-theme-600: var(--nb-blue-600);
-  --color-theme-700: var(--nb-blue-700);
-  --color-theme-800: #1e40af;
-  --color-theme-900: #1e3a8a;
-  --color-theme-950: #172554;
+  /* Nebula theme accent - purple-500 as default */
+  --color-theme-100: #ede9fe;
+  --color-theme-200: #ddd6fe;
+  --color-theme-300: #c4b5fd;
+  --color-theme-400: var(--nb-purple-400);
+  --color-theme-500: var(--nb-purple-500);
+  --color-theme-600: var(--nb-purple-600);
+  --color-theme-700: var(--nb-purple-700);
+  --color-theme-800: #4c1d95;
+  --color-theme-900: #2e1065;
+  --color-theme-950: #1a0a3d;
 
   /* Sidebar colors */
   --color-ink:   var(--nb-bg-sidebar);
@@ -118,19 +100,68 @@
   --color-faint: var(--nb-text-dim);
 }
 
-[data-theme="pterodactyl"] {
-  --theme-100: #dbeafe;
-  --theme-200: #bfdbfe;
-  --theme-300: #93c5fd;
-  --theme-400: #60a5fa;
-  --theme-500: #3b82f6;
-  --theme-600: #2563eb;
-  --theme-700: #1d4ed8;
-  --theme-800: #1e40af;
-  --theme-900: #1e3a8a;
-  --theme-950: #172554;
-  --theme-rgb-500: 59, 130, 246;
-  --theme-rgb-600: 37, 99, 235;
+/* Override all theme colors when data-theme set on body */
+[data-theme="nebula"] {
+  --theme-100: #ede9fe;
+  --theme-200: #ddd6fe;
+  --theme-300: #c4b5fd;
+  --theme-400: #a78bfa;
+  --theme-500: #8b5cf6;
+  --theme-600: #7c3aed;
+  --theme-700: #6d28d9;
+  --theme-800: #4c1d95;
+  --theme-900: #2e1065;
+  --theme-950: #1a0a3d;
+  --theme-rgb-500: 139, 92, 246;
+  --theme-rgb-600: 124, 58, 237;
+}
+
+/* Keep existing theme variants */
+[data-theme="blue"] {
+  --theme-100: #dbeafe; --theme-200: #bfdbfe; --theme-300: #93c5fd;
+  --theme-400: #60a5fa; --theme-500: #3b82f6; --theme-600: #2563eb;
+  --theme-700: #1d4ed8; --theme-800: #1e40af; --theme-900: #1e3a8a; --theme-950: #172554;
+  --theme-rgb-500: 59, 130, 246; --theme-rgb-600: 37, 99, 235;
+}
+[data-theme="red"] {
+  --theme-100: #fee2e2; --theme-200: #fecaca; --theme-300: #fca5a5;
+  --theme-400: #f87171; --theme-500: #ef4444; --theme-600: #dc2626;
+  --theme-700: #b91c1c; --theme-800: #991b1b; --theme-900: #7f1d1d; --theme-950: #450a0a;
+  --theme-rgb-500: 239, 68, 68; --theme-rgb-600: 220, 38, 38;
+}
+[data-theme="orange"] {
+  --theme-100: #ffedd5; --theme-200: #fed7aa; --theme-300: #fdba74;
+  --theme-400: #fb923c; --theme-500: #f97316; --theme-600: #ea580c;
+  --theme-700: #c2410c; --theme-800: #9a3412; --theme-900: #7c2d12; --theme-950: #431407;
+  --theme-rgb-500: 249, 115, 22; --theme-rgb-600: 234, 88, 12;
+}
+[data-theme="green"] {
+  --theme-100: #d1fae5; --theme-200: #a7f3d0; --theme-300: #6ee7b7;
+  --theme-400: #34d399; --theme-500: #10b981; --theme-600: #059669;
+  --theme-700: #047857; --theme-800: #065f46; --theme-900: #064e3b; --theme-950: #022c22;
+  --theme-rgb-500: 16, 185, 129; --theme-rgb-600: 5, 150, 105;
+}
+[data-theme="white"] {
+  --theme-100: #f4f4f5; --theme-200: #e4e4e7; --theme-300: #d4d4d8;
+  --theme-400: #a1a1aa; --theme-500: #71717a; --theme-600: #52525b;
+  --theme-700: #3f3f46; --theme-800: #27272a; --theme-900: #18181b; --theme-950: #09090b;
+  --theme-rgb-500: 113, 113, 122; --theme-rgb-600: 82, 82, 91;
+}
+
+/* Default theme (nebula purple) — applied when no data-theme set */
+:root {
+  --theme-100: #ede9fe;
+  --theme-200: #ddd6fe;
+  --theme-300: #c4b5fd;
+  --theme-400: #a78bfa;
+  --theme-500: #8b5cf6;
+  --theme-600: #7c3aed;
+  --theme-700: #6d28d9;
+  --theme-800: #4c1d95;
+  --theme-900: #2e1065;
+  --theme-950: #1a0a3d;
+  --theme-rgb-500: 139, 92, 246;
+  --theme-rgb-600: 124, 58, 237;
 }
 
 /* =============================================================================
@@ -186,7 +217,7 @@ input[type=number] { -moz-appearance: textfield; }
   select {
     background: var(--nb-bg-input);
     border: 1px solid var(--nb-border);
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     padding: 0.625rem 0.875rem;
     color: var(--nb-text-primary);
     font-family: "Inter", sans-serif;
@@ -202,8 +233,8 @@ input[type=number] { -moz-appearance: textfield; }
   input[type="email"]:focus,
   textarea:focus,
   select:focus {
-    border-color: var(--nb-blue-500);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    border-color: var(--nb-purple-500);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
   }
 
   input::placeholder, textarea::placeholder {
@@ -217,94 +248,94 @@ input[type=number] { -moz-appearance: textfield; }
 }
 
 /* =============================================================================
-   PTERODACTYL UI COMPONENTS
+   NEBULA UI COMPONENTS
    ============================================================================= */
 
 /* ── Cards ── */
 .nb-card {
   background: var(--nb-bg-card);
   border: 1px solid var(--nb-border);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   box-shadow: var(--nb-shadow-card);
 }
 
-/* ── Primary Button (Pterodactyl Blue) ── */
+/* ── Primary Button ── */
 .nb-btn-primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  background: #2563eb;
+  background: var(--nb-purple-600);
   color: #fff;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.875rem;
   padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  border: none;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 0 20px -6px rgba(124, 58, 237, 0.5);
 }
 .nb-btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--nb-purple-500);
+  box-shadow: 0 0 30px -6px rgba(139, 92, 246, 0.7);
 }
-.nb-btn-primary:active:not(:disabled) { transform: scale(0.98); }
+.nb-btn-primary:active:not(:disabled) { transform: scale(0.97); }
 .nb-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Ghost Button ── */
 .nb-btn-ghost {
   display: inline-flex; align-items: center; gap: 0.5rem;
-  background: #181d28;
+  background: transparent;
   color: var(--nb-text-secondary);
   font-size: 0.875rem;
   font-weight: 500;
   padding: 0.5rem 0.875rem;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--nb-border);
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .nb-btn-ghost:hover:not(:disabled) {
   color: var(--nb-text-primary);
-  background: #222938;
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--nb-bg-hover);
+  border-color: var(--nb-border-bright);
 }
-.nb-btn-ghost:active:not(:disabled) { transform: scale(0.98); }
+.nb-btn-ghost:active:not(:disabled) { transform: scale(0.97); }
 .nb-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Status badges ── */
 .nb-badge {
   display: inline-flex; align-items: center; gap: 0.375rem;
   padding: 0.2rem 0.6rem;
-  border-radius: 0.25rem;
+  border-radius: 9999px;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
-.nb-badge-online  { background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25); }
-.nb-badge-offline { background: rgba(239, 68, 68, 0.12);   color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25); }
-.nb-badge-warning { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25); }
-.nb-badge-purple  { background: rgba(37, 99, 235, 0.12); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.25); }
-.nb-badge-blue    { background: rgba(37, 99, 235, 0.12); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.25); }
+.nb-badge-online  { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.nb-badge-offline { background: rgba(71, 85, 105, 0.3);   color: #64748b; border: 1px solid rgba(71, 85, 105, 0.4); }
+.nb-badge-warning { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+.nb-badge-purple  { background: rgba(139, 92, 246, 0.12); color: var(--nb-purple-400); border: 1px solid rgba(139, 92, 246, 0.25); }
 
 /* ── Nav link (sidebar) ── */
 .nb-nav-link {
   display: flex; align-items: center; gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--nb-text-muted);
   border: 1px solid transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
   text-decoration: none;
   cursor: pointer;
 }
 .nb-nav-link:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--nb-text-primary);
+  background: var(--nb-bg-hover);
 }
 .nb-nav-link.active {
-  color: #ffffff;
-  background: rgba(37, 99, 235, 0.15);
-  border-color: rgba(37, 99, 235, 0.3);
+  color: var(--nb-purple-400);
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.25);
 }
 
 /* ── Table ── */
@@ -318,7 +349,7 @@ input[type=number] { -moz-appearance: textfield; }
   letter-spacing: 0.05em;
   color: var(--nb-text-muted);
   border-bottom: 1px solid var(--nb-border);
-  background: rgba(16, 20, 29, 0.5);
+  background: rgba(10, 14, 36, 0.5);
 }
 .nb-table td {
   padding: 0.75rem 1rem;
@@ -358,9 +389,9 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Glass effect ── */
 .nb-glass {
-  background: rgba(16, 20, 29, 0.75);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  background: rgba(6, 9, 26, 0.7);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
 }
 
 /* ── Glow dot (animated) ── */
@@ -380,7 +411,7 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Nebula gradient text ── */
 .nb-gradient-text {
-  background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 100%);
+  background: linear-gradient(135deg, var(--nb-purple-400) 0%, var(--nb-cyan-400) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -391,7 +422,8 @@ input[type=number] { -moz-appearance: textfield; }
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 60% 50% at 80% 0%, rgba(37, 99, 235, 0.06) 0%, transparent 60%);
+    radial-gradient(ellipse 60% 50% at 80% 0%, rgba(124, 58, 237, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 20% 100%, rgba(6, 182, 212, 0.04) 0%, transparent 60%);
 }
 
 /* =============================================================================
@@ -488,12 +520,12 @@ input[type=number] { -moz-appearance: textfield; }
    ============================================================================= */
 
 .qx-glass {
-  background: rgba(16, 20, 29, 0.7);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  background: rgba(6, 9, 26, 0.65);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
 }
 :root.has-bg-image .qx-glass {
-  background: rgba(16, 20, 29, 0.5);
+  background: rgba(6, 9, 26, 0.45);
 }
 
 .qx-input-glow:focus-within {
@@ -562,7 +594,7 @@ button:not(:disabled):active { transform: scale(0.97); }
 .card-lift { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease; }
 .card-lift:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(139, 92, 246, 0.15);
 }
 
 /* =============================================================================
@@ -571,11 +603,11 @@ button:not(:disabled):active { transform: scale(0.97); }
 
 :root.has-bg-image {
   --nb-bg-page: transparent;
-  --nb-bg-card: rgba(16, 20, 29, 0.6);
+  --nb-bg-card: rgba(6, 9, 26, 0.6);
   --bg-background: transparent;
-  --bg-card: rgba(16, 20, 29, 0.6);
+  --bg-card: rgba(6, 9, 26, 0.6);
   --color-background: transparent;
-  --color-card: rgba(16, 20, 29, 0.6);
+  --color-card: rgba(6, 9, 26, 0.6);
 }
 
 /* =============================================================================
@@ -584,14 +616,14 @@ button:not(:disabled):active { transform: scale(0.97); }
 
 .nb-progress-bar {
   height: 3px;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+  background: linear-gradient(90deg, var(--nb-purple-600), var(--nb-cyan-500));
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
   border-radius: 999px;
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* =============================================================================
-   PTERODACTYL LOGIN / AUTH STYLES
+   NEBULA LOGIN / AUTH STYLES
    ============================================================================= */
 
 .nb-auth-wrapper {
@@ -600,7 +632,7 @@ button:not(:disabled):active { transform: scale(0.97); }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b0e14;
+  background: var(--nb-bg-deepest);
   position: relative;
   overflow: hidden;
 }
@@ -609,33 +641,40 @@ button:not(:disabled):active { transform: scale(0.97); }
   content: '';
   position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(37, 99, 235, 0.1) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124, 58, 237, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 10% 90%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
 }
 
 .nb-auth-card {
   position: relative; z-index: 1;
-  background: #141824;
-  border: 1px solid #242c3f;
-  border-radius: 0.5rem;
-  padding: 2.25rem;
+  background: rgba(10, 14, 36, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 1rem;
+  padding: 2.5rem;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.7);
-  animation: nb-fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow:
+    0 24px 80px -16px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(139, 92, 246, 0.1),
+    0 0 60px -20px rgba(124, 58, 237, 0.3);
+  animation: nb-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .nb-auth-grid {
   position: absolute; inset: 0; pointer-events: none; overflow: hidden;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 /* =============================================================================
-   PTERODACTYL SERVER DEPLOY WIZARD
+   NEBULA SERVER DEPLOY WIZARD
    ============================================================================= */
 
+/* Matches CreateServer's deploy-theme but with Nebula colors */
 .nb-deploy-wrapper {
   background: var(--nb-bg-deepest);
   color: var(--nb-text-primary);
@@ -646,12 +685,12 @@ button:not(:disabled):active { transform: scale(0.97); }
 .nb-deploy-card {
   background: var(--nb-bg-card);
   border: 1px solid var(--nb-border);
-  border-radius: 0.5rem;
-  padding: 1.75rem;
+  border-radius: 0.75rem;
+  padding: 2rem;
 }
 
 .nb-deploy-step-dot {
-  width: 34px; height: 34px;
+  width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--nb-border);
   background: var(--nb-bg-input);
@@ -659,47 +698,47 @@ button:not(:disabled):active { transform: scale(0.97); }
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--nb-text-muted);
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .nb-deploy-step-dot.active {
-  border-color: #2563eb;
-  color: #ffffff;
-  background: #1d4ed8;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  border-color: var(--nb-purple-500);
+  color: var(--nb-purple-400);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2), 0 0 20px -4px rgba(124, 58, 237, 0.5);
 }
 .nb-deploy-step-dot.done {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
+  background: var(--nb-purple-600);
+  border-color: var(--nb-purple-600);
+  color: #fff;
 }
 
 .nb-sel-card {
   position: relative;
   background: var(--nb-bg-input);
   border: 1px solid var(--nb-border);
-  border-radius: 0.375rem;
+  border-radius: 0.625rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
-  padding: 0.875rem 1rem;
+  padding: 1rem;
 }
 .nb-sel-card:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: #181f2f;
+  transform: translateY(-2px);
+  border-color: var(--nb-border-bright);
+  box-shadow: 0 8px 24px -6px rgba(0,0,0,0.3);
 }
 .nb-sel-card.selected {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
-  box-shadow: 0 0 0 1px #2563eb;
+  border-color: var(--nb-purple-500);
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3), 0 8px 30px -8px rgba(124, 58, 237, 0.25);
 }
 .nb-sel-card .nb-tick {
   position: absolute; top: 8px; right: 8px;
   width: 18px; height: 18px;
-  background: #2563eb;
+  background: var(--nb-purple-600);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transform: scale(0.4);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   color: #fff;
 }
 .nb-sel-card.selected .nb-tick {
