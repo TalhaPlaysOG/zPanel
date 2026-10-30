@@ -25,7 +25,6 @@ import { SettingsProvider, useSettings } from "./context/SettingsContext";
 import { UploadProvider } from "./context/UploadContext";
 import { GlobalBackground } from "./components/GlobalBackground";
 import { SystemUpdateListener } from "./components/SystemUpdateListener";
-import { TutorialOverlay } from "./components/TutorialOverlay";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -72,65 +71,19 @@ const AnimatedRoutes = () => {
   );
 };
 
-const TutorialManager = () => {
-  const { panelName, enableTutorial } = useSettings();
-  const [showTutorial, setShowTutorial] = useState(false);
-  const { user, loading } = useAuth();
-  const location = useLocation();
-
-  useEffect(() => {
-    // If the feature is globally disabled, do not show tutorial
-    if (enableTutorial === false) {
-      setShowTutorial(false);
-      return;
-    }
-
-    if (loading || !user || location.pathname === '/login') return;
-
-    const isDev = process.env.NODE_ENV === 'development';
-    const tutorialKey = isDev ? `tutorialShown_dev_${user.id}` : `tutorialShown_prod_${user.id}`;
-    
-    const tutorialShown = isDev 
-      ? sessionStorage.getItem(tutorialKey) 
-      : localStorage.getItem(tutorialKey);
-
-    if (!tutorialShown) {
-      setShowTutorial(true);
-    }
-  }, [user, loading, location.pathname, enableTutorial]);
-
-  const handleTutorialComplete = () => {
-    if (!user) return;
-    const isDev = process.env.NODE_ENV === 'development';
-    const tutorialKey = isDev ? `tutorialShown_dev_${user.id}` : `tutorialShown_prod_${user.id}`;
-    
-    if (isDev) {
-      sessionStorage.setItem(tutorialKey, 'true');
-    } else {
-      localStorage.setItem(tutorialKey, 'true');
-    }
-    
-    setShowTutorial(false);
-  };
-
-  if (!showTutorial) return null;
-
-  return <TutorialOverlay onComplete={handleTutorialComplete} panelName={panelName} />;
-};
-
 export default function App() {
   return (
     <SettingsProvider>
       <AuthProvider>
         <SystemUpdateListener />
         <UploadProvider>
-        <GlobalBackground />
-        <Router>
-          <AnimatedRoutes />
-          <TutorialManager />
-        </Router>
+          <GlobalBackground />
+          <Router>
+            <AnimatedRoutes />
+          </Router>
         </UploadProvider>
       </AuthProvider>
     </SettingsProvider>
   );
 }
+

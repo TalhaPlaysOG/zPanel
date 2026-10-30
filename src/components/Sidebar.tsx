@@ -97,12 +97,11 @@ export function Sidebar({
                   width: "28px",
                   height: "28px",
                   borderRadius: "7px",
-                  background: "linear-gradient(135deg, var(--nb-purple-600) 0%, var(--nb-indigo-500) 100%)",
+                  background: "#2563eb",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
-                  boxShadow: "0 0 16px -4px rgba(124, 58, 237, 0.6)",
                 }}
               >
                 <Server size={14} color="#fff" />
@@ -138,11 +137,10 @@ export function Sidebar({
                   width: "30px",
                   height: "30px",
                   borderRadius: "8px",
-                  background: "linear-gradient(135deg, var(--nb-purple-600) 0%, var(--nb-indigo-500) 100%)",
+                  background: "#2563eb",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 0 16px -4px rgba(124, 58, 237, 0.6)",
                 }}
               >
                 <Server size={14} color="#fff" />
@@ -260,9 +258,9 @@ export function Sidebar({
                 textDecoration: "none",
                 fontSize: "0.8125rem",
                 fontWeight: active ? 600 : 500,
-                color: active ? "var(--nb-purple-400)" : "var(--nb-text-muted)",
-                background: active ? "rgba(124, 58, 237, 0.12)" : "transparent",
-                border: `1px solid ${active ? "rgba(124, 58, 237, 0.22)" : "transparent"}`,
+                color: active ? "#ffffff" : "var(--nb-text-muted)",
+                background: active ? "rgba(37, 99, 235, 0.15)" : "transparent",
+                border: `1px solid ${active ? "rgba(37, 99, 235, 0.3)" : "transparent"}`,
                 transition: "all 0.15s",
                 justifyContent: isCollapsed ? "center" : "flex-start",
                 position: "relative",
@@ -288,15 +286,14 @@ export function Sidebar({
                     transform: "translateY(-50%)",
                     width: "2px",
                     height: "60%",
-                    background: "var(--nb-purple-500)",
+                    background: "#2563eb",
                     borderRadius: "0 2px 2px 0",
-                    boxShadow: "2px 0 8px rgba(139,92,246,0.5)",
                   }}
                 />
               )}
               <Icon
                 size={16}
-                style={{ color: active ? "var(--nb-purple-400)" : "var(--nb-text-muted)", flexShrink: 0 }}
+                style={{ color: active ? "#60a5fa" : "var(--nb-text-muted)", flexShrink: 0 }}
               />
               {!isCollapsed && <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{link.name}</span>}
             </Link>
@@ -330,9 +327,9 @@ export function Sidebar({
                     textDecoration: "none",
                     fontSize: "0.8125rem",
                     fontWeight: active ? 600 : 500,
-                    color: active ? "var(--nb-purple-400)" : "var(--nb-text-muted)",
-                    background: active ? "rgba(124, 58, 237, 0.12)" : "transparent",
-                    border: `1px solid ${active ? "rgba(124, 58, 237, 0.22)" : "transparent"}`,
+                    color: active ? "#ffffff" : "var(--nb-text-muted)",
+                    background: active ? "rgba(37, 99, 235, 0.15)" : "transparent",
+                    border: `1px solid ${active ? "rgba(37, 99, 235, 0.3)" : "transparent"}`,
                     transition: "all 0.15s",
                     justifyContent: isCollapsed ? "center" : "flex-start",
                     position: "relative",
@@ -358,15 +355,14 @@ export function Sidebar({
                         transform: "translateY(-50%)",
                         width: "2px",
                         height: "60%",
-                        background: "var(--nb-purple-500)",
+                        background: "#2563eb",
                         borderRadius: "0 2px 2px 0",
-                        boxShadow: "2px 0 8px rgba(139,92,246,0.5)",
                       }}
                     />
                   )}
                   <Icon
                     size={16}
-                    style={{ color: active ? "var(--nb-purple-400)" : "var(--nb-text-muted)", flexShrink: 0 }}
+                    style={{ color: active ? "#60a5fa" : "var(--nb-text-muted)", flexShrink: 0 }}
                   />
                   {!isCollapsed && <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{link.name}</span>}
                 </Link>
@@ -430,7 +426,7 @@ export function Sidebar({
                   width: "28px",
                   height: "28px",
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, var(--nb-purple-700), var(--nb-indigo-500))",
+                  background: "#1e3a5f",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -438,7 +434,7 @@ export function Sidebar({
                   fontWeight: 700,
                   color: "#fff",
                   flexShrink: 0,
-                  border: "1px solid rgba(139,92,246,0.3)",
+                  border: "1px solid #242c3f",
                 }}
               >
                 {avatarLetter}
