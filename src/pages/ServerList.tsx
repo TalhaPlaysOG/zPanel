@@ -340,7 +340,7 @@ export default function ServerList() {
 
   return (
     <div className="relative">
-      <div className="relative mx-auto max-w-7xl">
+      <div className="relative w-full max-w-full">
         <PageHeader 
           title="Instances" 
           subtitle="INFRASTRUCTURE" 

@@ -46,15 +46,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return "";
   };
 
-  // Server view and create server have their own full-screen layout
-  if (isServerView || isCreateServer) {
-    return (
-      <div className="zp-bg-page text-zp-text-primary min-h-[100dvh] w-full overflow-hidden font-sans">
-        <main className="flex-1 w-full h-full overflow-auto">{children}</main>
-      </div>
-    );
-  }
-
   return (
     <div className="zp-bg-page text-zp-text-primary min-h-[100dvh] w-full overflow-hidden font-sans">
       {/* Mobile overlay */}
@@ -133,14 +124,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ── Page content ── */}
-        <main className="flex-1 overflow-hidden relative custom-scrollbar">
-          {location.pathname === "/" ? (
-            children
-          ) : (
-            <div className="p-6 max-w-[1280px] mx-auto w-full pb-12">
-              {children}
-            </div>
-          )}
+        <main className="flex-1 overflow-y-auto relative custom-scrollbar">
+          <div className="p-6 sm:p-8 max-w-full w-full pb-12">
+            {children}
+          </div>
         </main>
       </div>
     </div>

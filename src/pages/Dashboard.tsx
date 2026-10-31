@@ -94,7 +94,7 @@ export default function Dashboard() {
       : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-[1280px] mx-auto w-full pb-12">
+    <div className="flex-1 overflow-y-auto p-6 sm:p-8 max-w-full w-full pb-12">
       {/* ── Page Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-2 mb-6">
         <div>
