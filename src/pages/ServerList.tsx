@@ -27,6 +27,9 @@ interface ServerRecord {
   disk?: number;
   version?: string;
   suspended?: boolean;
+  description?: string;
+  ipAlias?: string;
+  port?: number;
 }
 
 interface ServersState {
@@ -99,19 +102,20 @@ const StatusBadge = memo(function StatusBadge({
   const online = isOnline(status);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${
-        online
-          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_-2px_rgba(16,185,129,0.3)]"
-          : "bg-slate-800/60 text-[#94a3b8] border border-[rgba(139,92,246,0.15)]"
-      }`}
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide"
+      style={{
+        backgroundColor: online ? "rgba(54, 201, 143, 0.12)" : "rgba(237, 98, 111, 0.12)",
+        color: online ? "var(--zp-success)" : "var(--zp-danger)",
+        borderColor: online ? "rgba(54, 201, 143, 0.25)" : "rgba(237, 98, 111, 0.25)",
+      }}
     >
       <span className="relative flex h-2 w-2">
         {online && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zp-success opacity-75 motion-reduce:hidden" />
         )}
         <span
           className={`relative inline-flex h-2 w-2 rounded-full ${
-            online ? "bg-emerald-400" : "bg-slate-500"
+            online ? "bg-zp-success" : "bg-zp-text-muted"
           }`}
         />
       </span>
@@ -123,10 +127,10 @@ const StatusBadge = memo(function StatusBadge({
 function Metric({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zp-text-dim">
         {label}
       </p>
-      <div className="font-mono text-sm font-semibold text-[#f0f4ff]">
+      <div className="font-mono text-sm font-semibold text-zp-text-primary">
         {children}
       </div>
     </div>
@@ -151,25 +155,25 @@ const ServerCard = memo(function ServerCard({
       <div
         className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
           online
-            ? "bg-gradient-to-r from-transparent via-emerald-500/70 to-transparent"
-            : "bg-gradient-to-r from-transparent via-purple-500/30 to-transparent"
+            ? "bg-gradient-to-r from-transparent via-zp-success/70 to-transparent"
+            : "bg-gradient-to-r from-transparent via-zp-primary-500/30 to-transparent"
         }`}
       />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[rgba(139,92,246,0.25)] bg-[rgba(124,58,237,0.12)] text-[#a78bfa] shadow-[0_0_16px_-4px_rgba(124,58,237,0.3)] transition-colors group-hover:border-[rgba(139,92,246,0.45)] group-hover:text-white">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zp-primary-500/25 bg-zp-primary-500/10 text-zp-primary-400 shadow-[0_0_16px_-4px_rgba(130,149,255,0.3)] transition-colors group-hover:border-zp-primary-500/45 group-hover:text-white">
             <Server className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-base sm:text-lg font-bold tracking-tight text-[#f0f4ff] group-hover:text-white transition-colors">
+            <h2 className="truncate text-base sm:text-lg font-bold tracking-tight text-zp-text-primary group-hover:text-zp-text-primary transition-colors">
               {server.name}
             </h2>
             <div className="mt-1 flex items-center gap-2">
               <StatusBadge status={server.status} />
               {isSuspended && (
-                <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-400 uppercase">
+                <span className="inline-flex items-center gap-1 rounded-md border border-zp-danger/30 bg-zp-danger/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-zp-danger uppercase">
                   <Lock className="h-3 w-3" />
                   Suspended
                 </span>
@@ -178,15 +182,15 @@ const ServerCard = memo(function ServerCard({
           </div>
         </div>
         {!isSuspended && (
-          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-[#64748b] transition-all group-hover:translate-x-1 group-hover:text-[#a78bfa]" />
+          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-zp-text-muted transition-all group-hover:translate-x-1 group-hover:text-zp-primary-500" />
         )}
       </div>
 
       {/* Metrics */}
-      <div className="mt-4 grid grid-cols-2 gap-3.5 rounded-xl border border-[rgba(139,92,246,0.12)] bg-[rgba(6,9,26,0.6)] px-4 py-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3.5 rounded-xl border border-zp-primary-500/10 bg-black/40 px-4 py-3 sm:grid-cols-4">
         <Metric label="CPU Limit">
           {server.cpu ?? DEFAULT_CPU}
-          <span className="ml-0.5 text-xs text-[#64748b]">%</span>
+          <span className="ml-0.5 text-xs text-zp-text-dim">%</span>
         </Metric>
         <Metric label="RAM Usage">
           <ServerLiveStats
@@ -197,7 +201,7 @@ const ServerCard = memo(function ServerCard({
         </Metric>
         <Metric label="Disk Limit">
           {server.disk ?? DEFAULT_DISK}
-          <span className="ml-0.5 text-xs text-[#64748b]">GB</span>
+          <span className="ml-0.5 text-xs text-zp-text-dim">GB</span>
         </Metric>
         <Metric label="Version">
           <span className="block truncate" title={server.version}>
@@ -220,19 +224,19 @@ const ServerCard = memo(function ServerCard({
           }}
           title={`Delete ${server.name}`}
           aria-label={`Delete ${server.name}`}
-          className="absolute right-12 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-300/80 transition-all hover:border-rose-500/50 hover:bg-rose-500/20 hover:text-rose-200 active:scale-95"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zp-danger/25 bg-zp-danger/10 text-zp-danger/80 transition-all hover:border-zp-danger/50 hover:bg-zp-danger/20 hover:text-zp-danger active:scale-95"
         >
           <Trash2 className="h-4 w-4" />
         </button>
       )}
       {isSuspended ? (
-        <div className="group relative block overflow-hidden rounded-2xl border border-[rgba(239,68,68,0.2)] bg-[rgba(10,14,36,0.7)] p-5 opacity-70 md:p-6 cursor-not-allowed">
+        <div className="group relative block overflow-hidden rounded-2xl border border-zp-danger/20 bg-black/60 p-5 opacity-70 md:p-6 cursor-not-allowed">
           {content}
         </div>
       ) : (
         <Link
           to={`/servers/${server.id}`}
-          className="group relative block overflow-hidden rounded-2xl border border-[rgba(139,92,246,0.18)] bg-[rgba(15,21,53,0.65)] backdrop-blur-xl p-5 transition-all duration-200 hover:border-[rgba(139,92,246,0.4)] hover:bg-[rgba(15,21,53,0.85)] hover:shadow-[0_8px_30px_-6px_rgba(0,0,0,0.6),0_0_25px_-5px_rgba(124,58,237,0.25)] md:p-6"
+          className="group relative block overflow-hidden rounded-2xl border border-zp-primary-500/15 bg-zp-card backdrop-blur-xl p-5 transition-all duration-200 hover:border-zp-primary-500/40 hover:bg-zp-card-alt hover:shadow-zp-shadow-card md:p-6"
         >
           {content}
         </Link>
@@ -245,10 +249,10 @@ function LoadingState() {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
       <div
-        className="h-10 w-10 animate-spin rounded-full border-2 border-[rgba(139,92,246,0.2)] border-t-[#8b5cf6]"
+        className="h-10 w-10 animate-spin rounded-full border-2 border-zp-border border-t-zp-primary-500"
         aria-hidden
       />
-      <p className="text-sm font-medium text-[#94a3b8]">Loading server fleet…</p>
+      <p className="text-sm font-medium text-zp-text-secondary">Loading server fleet…</p>
     </div>
   );
 }
@@ -257,21 +261,21 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <motion.div
       variants={itemVariants}
-      className="col-span-full flex flex-col items-center justify-center rounded-2xl border border-dashed border-[rgba(139,92,246,0.2)] bg-[rgba(10,14,36,0.6)] px-6 py-20 text-center"
+      className="col-span-full flex flex-col items-center justify-center rounded-2xl border border-dashed border-zp-primary-500/20 bg-zp-card px-6 py-20 text-center"
     >
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[rgba(139,92,246,0.3)] bg-[rgba(124,58,237,0.12)] text-[#a78bfa] shadow-[0_0_24px_-4px_rgba(124,58,237,0.4)]">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-zp-primary-500/30 bg-zp-primary-500/10 text-zp-primary-400 shadow-[0_0_24px_-4px_rgba(130,149,255,0.4)]">
         <Server className="h-8 w-8" />
       </div>
-      <h3 className="text-lg font-bold text-[#f0f4ff]">
+      <h3 className="text-lg font-bold text-zp-text-primary">
         No server instances deployed
       </h3>
-      <p className="mt-1 max-w-sm text-sm text-[#94a3b8]">
+      <p className="mt-1 max-w-sm text-sm text-zp-text-muted">
         You haven&apos;t deployed any game servers yet. Deploy an instance to start managing console, files, and players.
       </p>
       {isAdmin && (
         <Link
           to="/servers/create"
-          className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-5 text-sm font-bold text-white shadow-[0_0_20px_-4px_rgba(124,58,237,0.6)] transition-all active:scale-95"
+          className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-zp-primary-600 to-zp-primary-700 hover:from-zp-primary-500 hover:to-zp-primary-600 px-5 text-sm font-bold text-white shadow-zp-shadow-glow transition-all active:scale-95"
         >
           <Plus className="h-4 w-4" />
           Deploy First Server
@@ -345,13 +349,13 @@ export default function ServerList() {
               <div className="flex items-center gap-2.5">
                 <Link
                   to="/admin/servers"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-[rgba(139,92,246,0.22)] bg-[rgba(6,9,26,0.6)] text-[#94a3b8] hover:text-[#f0f4ff] hover:border-[rgba(139,92,246,0.4)] transition-all"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-zp-primary-500/20 bg-black/40 text-zp-text-secondary hover:text-zp-text-primary hover:border-zp-primary-500/40 transition-all"
                 >
                   <Settings className="w-3.5 h-3.5" /> Manage Fleet
                 </Link>
                 <Link
                   to="/servers/create"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-[0_0_20px_-4px_rgba(124,58,237,0.6)] transition-all active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-zp-primary-600 to-zp-primary-700 hover:from-zp-primary-500 hover:to-zp-primary-600 text-white shadow-zp-shadow-glow transition-all active:scale-95"
                 >
                   <Plus className="w-4 h-4" /> New Instance
                 </Link>
@@ -363,9 +367,9 @@ export default function ServerList() {
         {/* Online summary pill */}
         {hasServers && (
           <div className="mb-5 flex items-center gap-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[rgba(10,14,36,0.7)] border border-[rgba(139,92,246,0.18)] text-xs text-[#94a3b8]">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <strong className="text-[#f0f4ff] font-mono">{onlineCount}</strong> of <strong className="text-[#f0f4ff] font-mono">{servers.length}</strong> online
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-black/40 border border-zp-primary-500/15 text-xs text-zp-text-muted">
+              <span className="w-2 h-2 rounded-full bg-zp-success" />
+              <strong className="text-zp-text-primary font-mono">{onlineCount}</strong> of <strong className="text-zp-text-primary font-mono">{servers.length}</strong> online
             </span>
           </div>
         )}
@@ -374,7 +378,7 @@ export default function ServerList() {
         {error && (
           <div
             role="alert"
-            className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-300"
+            className="mb-6 rounded-xl border border-zp-danger/30 bg-zp-danger/10 px-4 py-3 text-sm font-medium text-zp-danger/90"
           >
             {error}
           </div>
@@ -405,24 +409,24 @@ export default function ServerList() {
 
       {deletingServer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-rose-500/40 bg-[rgba(10,14,36,0.98)] p-6 shadow-[0_0_60px_-10px_rgba(244,63,94,0.45)] ring-1 ring-rose-500/20 md:p-8">
-            <div className="absolute left-0 top-0 h-1.5 w-full bg-gradient-to-r from-rose-600 to-red-500" />
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-zp-danger/40 bg-zp-card p-6 shadow-zp-shadow-card ring-1 ring-zp-danger/20 md:p-8">
+            <div className="absolute left-0 top-0 h-1.5 w-full bg-gradient-to-r from-zp-danger-600 to-zp-danger-500" />
             <div className="mb-4 flex items-start">
-              <div className="mr-4 shrink-0 rounded-xl bg-rose-600/20 p-3 text-rose-400">
+              <div className="mr-4 shrink-0 rounded-xl bg-zp-danger/20 p-3 text-zp-danger">
                 <AlertTriangle className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="mb-1 text-lg font-bold text-white">Delete “{deletingServer.name}”?</h3>
-                <p className="text-sm leading-relaxed text-[#94a3b8]">
+                <h3 className="mb-1 text-lg font-bold text-zp-text-primary">Delete “{deletingServer.name}”?</h3>
+                <p className="text-sm leading-relaxed text-zp-text-muted">
                   This permanently deletes the server, all worlds and files, backups, logs, configuration,
                   SFTP access, tunnel settings and database records. The server is stopped first.
-                  <strong className="text-rose-300"> This action cannot be undone.</strong>
+                  <strong className="text-zp-danger"> This action cannot be undone.</strong>
                 </p>
               </div>
             </div>
 
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
-              Type <span className="font-mono text-rose-300">{deletingServer.name}</span> to confirm
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-zp-text-dim">
+              Type <span className="font-mono text-zp-danger">{deletingServer.name}</span> to confirm
             </label>
             <input
               type="text"
@@ -432,11 +436,11 @@ export default function ServerList() {
               spellCheck={false}
               autoComplete="off"
               placeholder={deletingServer.name}
-              className="w-full rounded-xl border border-rose-500/30 bg-black/60 px-4 py-2.5 font-mono text-sm text-white outline-none focus:border-rose-500"
+              className="w-full rounded-xl border border-zp-danger/30 bg-zp-bg-input px-4 py-2.5 font-mono text-sm text-zp-text-primary outline-none focus:border-zp-primary-500"
             />
 
             {deleteError && (
-              <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+              <p className="mt-3 rounded-lg border border-zp-danger/30 bg-zp-danger/10 px-3 py-2 text-xs text-zp-danger/90">
                 {deleteError}
               </p>
             )}
@@ -445,14 +449,14 @@ export default function ServerList() {
               <button
                 onClick={closeDelete}
                 disabled={deleteBusy}
-                className="rounded-xl bg-[rgba(255,255,255,0.06)] px-5 py-2.5 font-semibold text-[#cbd5e1] transition-all hover:bg-[rgba(255,255,255,0.1)] disabled:opacity-50"
+                className="rounded-xl bg-zp-bg-input px-5 py-2.5 font-semibold text-zp-text-secondary transition-all hover:bg-zp-bg-hover disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteBusy || deleteConfirmText.trim() !== String(deletingServer.name || "").trim()}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 font-bold text-white transition-all hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded-xl bg-zp-danger-600 px-5 py-2.5 font-bold text-white transition-all hover:bg-zp-danger-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleteBusy ? "Deleting…" : "Delete permanently"}

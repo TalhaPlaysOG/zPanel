@@ -20,6 +20,7 @@ import PlayitPage from "./pages/PlayitPage";
 import CloudflareTunnel from "./pages/CloudflareTunnel";
 import UsersPage from "./pages/UsersPage";
 import SettingsPage from "./pages/SettingsPage";
+import JavaRuntimeManager from "./pages/JavaRuntimeManager";
 import Layout from "./components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
@@ -68,6 +69,7 @@ const AnimatedRoutes = () => {
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/account" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/java-runtime" element={<ProtectedRoute><JavaRuntimeManager /></ProtectedRoute>} />
         </Routes>
       </motion.div>
     </AnimatePresence>

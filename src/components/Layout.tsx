@@ -42,67 +42,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (path === "/settings" || path === "/admin/settings") return "Settings";
     if (path === "/playit") return "Playit Tunnels";
     if (path === "/cloudflare") return "Cloudflare Tunnel";
+    if (path === "/java-runtime") return "Java Runtime Manager";
     return "";
   };
 
   // Server view and create server have their own full-screen layout
   if (isServerView || isCreateServer) {
     return (
-      <div
-        style={{
-          display: "flex",
-          height: "100dvh",
-          width: "100%",
-          background: "var(--nb-bg-page)",
-          color: "var(--nb-text-primary)",
-          overflow: "hidden",
-        }}
-      >
-        <main style={{ flex: 1, width: "100%", height: "100%", overflow: "auto" }}>
-          {children}
-        </main>
+      <div className="zp-bg-page text-zp-text-primary min-h-[100dvh] w-full overflow-hidden font-sans">
+        <main className="flex-1 w-full h-full overflow-auto">{children}</main>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100dvh",
-        width: "100%",
-        background: "var(--nb-bg-page)",
-        color: "var(--nb-text-primary)",
-        overflow: "hidden",
-        fontFamily: '"Inter", sans-serif',
-      }}
-    >
+    <div className="zp-bg-page text-zp-text-primary min-h-[100dvh] w-full overflow-hidden font-sans">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.7)",
-            backdropFilter: "blur(4px)",
-            zIndex: 40,
-          }}
-          className="md:hidden"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div
+        className="fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:!transform-none"
         style={{
-          position: "fixed" as const,
-          insetBlock: 0,
-          left: 0,
-          zIndex: 50,
           transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
-          transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
-        className="md:relative md:translate-x-0 md:!transform-none"
       >
         <Sidebar
           onClose={() => setMobileOpen(false)}
@@ -112,49 +80,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main area */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          minWidth: 0,
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* ── Top Header / Navbar ── */}
-        <header
-          style={{
-            height: "60px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 1.25rem",
-            borderBottom: "1px solid var(--nb-border-subtle)",
-            background: "rgba(8, 12, 31, 0.9)",
-            backdropFilter: "blur(16px) saturate(1.2)",
-            flexShrink: 0,
-            zIndex: 30,
-            position: "sticky",
-            top: 0,
-          }}
-        >
+        <header className="h-[60px] flex items-center justify-between px-4 border-b border-zp-border-subtle bg-black/60 backdrop-blur-xl flex-shrink-0 z-30 sticky top-0">
           {/* Left side */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div className="flex items-center gap-3">
             {/* Mobile hamburger */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("toggle-sidebar"))}
-              className="md:hidden"
-              style={{
-                padding: "0.4rem",
-                borderRadius: "6px",
-                background: "transparent",
-                border: "none",
-                color: "var(--nb-text-muted)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-              }}
+              className="md:hidden p-1 rounded-md bg-transparent border-none text-zp-text-muted cursor-pointer flex items-center hover:bg-zp-bg-hover hover:text-zp-text-primary transition-colors"
             >
               <Menu size={18} />
             </button>
@@ -162,25 +96,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Desktop collapse button */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("toggle-sidebar"))}
-              className="hidden md:flex"
-              style={{
-                padding: "0.4rem",
-                borderRadius: "6px",
-                background: "transparent",
-                border: "none",
-                color: "var(--nb-text-dim)",
-                cursor: "pointer",
-                alignItems: "center",
-                transition: "color 0.15s, background 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--nb-text-primary)";
-                (e.currentTarget as HTMLButtonElement).style.background = "var(--nb-bg-hover)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--nb-text-dim)";
-                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              }}
+              className="hidden md:flex p-1 rounded-md bg-transparent border-none text-zp-text-dim cursor-pointer flex items-center hover:bg-zp-bg-hover hover:text-zp-text-primary transition-colors"
               title="Toggle Sidebar"
             >
               <Menu size={16} />
@@ -188,28 +104,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Breadcrumb */}
             {getBreadcrumb() && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+              <div className="flex items-center gap-1.5">
                 <Link
                   to="/"
-                  style={{
-                    fontSize: "0.8rem",
-                    color: "var(--nb-text-dim)",
-                    textDecoration: "none",
-                    transition: "color 0.15s",
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--nb-text-secondary)")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--nb-text-dim)")}
+                  className="text-zp-text-dim text-xs no-underline hover:text-zp-text-secondary transition-colors"
                 >
                   Home
                 </Link>
-                <span style={{ color: "var(--nb-text-dim)", fontSize: "0.7rem" }}>/</span>
-                <span
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    color: "var(--nb-text-secondary)",
-                  }}
-                >
+                <span className="text-zp-text-dim text-[0.7rem]">/</span>
+                <span className="text-xs font-medium text-zp-text-secondary">
                   {getBreadcrumb()}
                 </span>
               </div>
@@ -217,34 +120,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Right side */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+          <div className="flex items-center gap-2">
             {/* Status indicator */}
-            <div
-              className="hidden md:flex"
-              style={{
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.25rem 0.75rem",
-                borderRadius: "9999px",
-                background: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.2)",
-                fontSize: "0.68rem",
-                fontWeight: 600,
-                color: "#34d399",
-                letterSpacing: "0.04em",
-                fontFamily: '"JetBrains Mono", monospace',
-              }}
-            >
-              <span
-                style={{
-                  width: "6px",
-                  height: "6px",
-                  borderRadius: "50%",
-                  background: "var(--nb-green)",
-                  boxShadow: "0 0 6px rgba(16,185,129,0.6)",
-                  display: "inline-block",
-                }}
-              />
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-zp-success/10 border border-zp-success/20 text-zp-success/90 text-[0.68rem] font-bold tracking-wide font-mono">
+              <span className="w-[6px] h-[6px] rounded-full bg-zp-success shadow-[0_0_6px_rgba(54,201,143,0.6)] inline-block" />
               ALL SYSTEMS GO
             </div>
 
@@ -254,25 +133,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ── Page content ── */}
-        <main
-          style={{
-            flex: 1,
-            overflow: "hidden auto",
-            position: "relative",
-          }}
-          className="custom-scrollbar"
-        >
+        <main className="flex-1 overflow-hidden relative custom-scrollbar">
           {location.pathname === "/" ? (
             children
           ) : (
-            <div
-              style={{
-                padding: "1.5rem 1.5rem 3rem",
-                maxWidth: "1280px",
-                margin: "0 auto",
-                width: "100%",
-              }}
-            >
+            <div className="p-6 max-w-[1280px] mx-auto w-full pb-12">
               {children}
             </div>
           )}
