@@ -8,54 +8,9 @@ import axios from "axios";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import {
-  Server, User, Lock, Eye, EyeOff, Terminal, Folder, Shield, Database,
-  RefreshCw, Play, Users, Cloud, Globe, Zap, Layers, Monitor, Wifi, Code2,
-  Save, Puzzle, Box, Map, SlidersHorizontal, Sparkles, FastForward, Feather,
+  Server, User, Lock, Eye, EyeOff,
 } from "lucide-react";
 import "./Login.css";
-
-// Showcase cards with CSS variable class names for gradient tiles
-const SHOWCASE_CARDS = [
-  { id: "paper", label: "Paper", desc: "High Performance", icon: Zap, grad: "grad-paper" },
-  { id: "purpur", label: "Purpur", desc: "Paper + Extra Features", icon: Sparkles, grad: "grad-purpur" },
-  { id: "vanilla", label: "Vanilla", desc: "Official Minecraft", icon: Server, grad: "grad-vanilla" },
-  { id: "spigot", label: "Spigot", desc: "Classic Plugins", icon: Wrench, grad: "grad-spigot" },
-  { id: "fabric", label: "Fabric", desc: "Lightweight Mods", icon: Feather, grad: "grad-fabric" },
-  { id: "forge", label: "Forge", desc: "Classic Modpack", icon: Wrench, grad: "grad-forge" },
-  { id: "bungeecord", label: "BungeeCord", desc: "Classic Proxy", icon: Network, grad: "grad-bungeecord" },
-  { id: "velocity", label: "Velocity", desc: "Next-gen Proxy", icon: FastForward, grad: "grad-velocity" },
-  { id: "live-console", label: "Live Console", desc: "Real-time streaming", icon: Terminal, grad: "grad-console" },
-  { id: "file-manager", label: "File Manager", desc: "Edit, upload, organize", icon: Folder, grad: "grad-file" },
-  { id: "sftp", label: "SFTP Access", desc: "Secure file transfer", icon: Shield, grad: "grad-sftp" },
-  { id: "backups", label: "Backups", desc: "Protect your worlds", icon: Database, grad: "grad-backups" },
-  { id: "sub-users", label: "Sub-Users", desc: "Share server access", icon: Users, grad: "grad-subusers" },
-  { id: "players", label: "Player Manager", desc: "Manage your community", icon: Users, grad: "grad-players" },
-  { id: "plugins", label: "Plugins", desc: "Extend functionality", icon: Puzzle, grad: "grad-plugins" },
-  { id: "mods", label: "Mods", desc: "Install modpacks", icon: Box, grad: "grad-mods" },
-  { id: "world-manager", label: "World Manager", desc: "Control your maps", icon: Map, grad: "grad-world" },
-  { id: "server-properties", label: "Server Properties", desc: "Configure settings", icon: SlidersHorizontal, grad: "grad-props" },
-  { id: "playit", label: "Playit.gg Tunnel", desc: "Expose your server", icon: Globe, grad: "grad-playit" },
-  { id: "cloudflare", label: "Cloudflare Tunnel", desc: "Secure remote access", icon: Cloud, grad: "grad-cf" },
-  { id: "docker-local", label: "Docker & Local", desc: "Flexible runtimes", icon: Layers, grad: "grad-docker" },
-  { id: "java-runtime", label: "Java Runtime", desc: "Java 17/21/25", icon: Monitor, grad: "grad-java" },
-  { id: "nodes", label: "Nodes", desc: "Multi-node hosting", icon: Wifi, grad: "grad-nodes" },
-  { id: "api-keys", label: "API Keys", desc: "Programmatic access", icon: Code2, grad: "grad-api" },
-];
-
-const ShowcaseCard = ({ card }: { card: (typeof SHOWCASE_CARDS)[number] }) => {
-  const Icon = card.icon;
-  return (
-    <div className="nb-login-showcase-card">
-      <div className={`nb-login-showcase-card-tile ${card.grad}`}>
-        <Icon className="nb-login-showcase-card-icon" />
-      </div>
-      <div className="nb-login-showcase-card-body">
-        <span className="nb-login-showcase-card-name">{card.label}</span>
-        <span className="nb-login-showcase-card-desc">{card.desc}</span>
-      </div>
-    </div>
-  );
-};
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -162,161 +117,136 @@ export default function Login() {
 
   return (
     <div className="nb-login-wrapper">
+      {/* Ambient background glows */}
+      <div className="nb-login-bg-glows" />
+
+      {/* Showcase wall (desktop only) */}
       {animationEnabled && (
         <div className="nb-login-showcase">
-          <div className="nb-login-showcase-bg">
-            <div className="nb-login-glow nb-login-glow-1" />
-            <div className="nb-login-glow nb-login-glow-2" />
-            <div className="nb-login-glow nb-login-glow-3" />
-          </div>
-
           <div className="nb-login-showcase-text">
             <h2 className="nb-login-showcase-headline">Your Minecraft servers. One panel.</h2>
             <p className="nb-login-showcase-subhead">
               Live console, file manager, backups and player management, wrapped in an interface built for speed.
             </p>
           </div>
-
-          <div className="nb-login-showcase-mask">
-            <div className="nb-login-showcase-grid">
-              <div className="nb-login-showcase-col nb-login-scroll-up">
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 0).map(card => (
-                  <ShowcaseCard key={card.id} card={card} />
-                ))}
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 0).map(card => (
-                  <ShowcaseCard key={`dup-${card.id}`} card={card} />
-                ))}
-              </div>
-              <div className="nb-login-showcase-col nb-login-scroll-down">
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 1).map(card => (
-                  <ShowcaseCard key={card.id} card={card} />
-                ))}
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 1).map(card => (
-                  <ShowcaseCard key={`dup-${card.id}`} card={card} />
-                ))}
-              </div>
-              <div className="nb-login-showcase-col nb-login-scroll-up">
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 2).map(card => (
-                  <ShowcaseCard key={card.id} card={card} />
-                ))}
-                {SHOWCASE_CARDS.filter((_, i) => i % 3 === 2).map(card => (
-                  <ShowcaseCard key={`dup-${card.id}`} card={card} />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
+      {/* Centered login card */}
       <main className="nb-login-main">
-        <div className="nb-login-brand">
-          {panelLogo ? (
-            <img src={panelLogo} alt="Logo" className="nb-login-logo-img" />
-          ) : (
-            <div className="nb-login-logo">
-              <Server size={20} className="nb-login-logo-icon" />
-            </div>
-          )}
-          <div>
-            <h1 className="nb-login-title">{panelName || "zPanel"}</h1>
-            <p className="nb-login-subtitle">Access your servers, console and files.</p>
-          </div>
-        </div>
-
-        {error && <div className="nb-login-error" role="alert" aria-live="polite">{error}</div>}
-
-        <form onSubmit={handleLogin} autoComplete="off" noValidate>
-          <div className="nb-login-input-wrap">
-            <label htmlFor="username" className="nb-login-label">Username</label>
-            <div className="nb-login-input-field">
-              <User className="nb-login-input-icon" />
-              <input
-                id="username"
-                type="text"
-                name="username"
-                placeholder="Enter your username"
-                className="nb-login-input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                onBlur={() => setUsernameTried(true)}
-              />
-            </div>
-            {usernameTried && !username.trim() && (
-              <span className="nb-login-field-error">A username must be provided.</span>
+        <div className="nb-login-card">
+          {/* Brand */}
+          <div className="nb-login-brand">
+            {panelLogo ? (
+              <img src={panelLogo} alt="Logo" className="nb-login-logo-img" />
+            ) : (
+              <div className="nb-login-logo">
+                <Server size={20} className="nb-login-logo-icon" />
+              </div>
             )}
+            <div>
+              <h1 className="nb-login-title">{panelName || "zPanel"}</h1>
+              <p className="nb-login-subtitle">Access your servers, console and files.</p>
+            </div>
           </div>
 
-          <div className="nb-login-input-wrap">
-            <label htmlFor="password" className="nb-login-label">Password</label>
-            <div className="nb-login-input-field">
-              <Lock className="nb-login-input-icon" />
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                name="password"
-                placeholder="Enter your password"
-                className="nb-login-input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                onBlur={() => setPasswordTried(true)}
-              />
+          {/* Error box */}
+          {error && <div className="nb-login-error" role="alert" aria-live="polite">{error}</div>}
+
+          {/* Form */}
+          <form onSubmit={handleLogin} autoComplete="off" noValidate>
+            <div className="nb-login-input-wrap">
+              <label htmlFor="username" className="nb-login-label">Username</label>
+              <div className="nb-login-input-field">
+                <User className="nb-login-input-icon" />
+                <input
+                  id="username"
+                  type="text"
+                  name="username"
+                  placeholder="Enter your username"
+                  className="nb-login-input"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  onBlur={() => setUsernameTried(true)}
+                />
+              </div>
+              {usernameTried && !username.trim() && (
+                <span className="nb-login-field-error">A username must be provided.</span>
+              )}
+            </div>
+
+            <div className="nb-login-input-wrap">
+              <label htmlFor="password" className="nb-login-label">Password</label>
+              <div className="nb-login-input-field">
+                <Lock className="nb-login-input-icon" />
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Enter your password"
+                  className="nb-login-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  onBlur={() => setPasswordTried(true)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="nb-login-password-toggle"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {passwordTried && !password.trim() && (
+                <span className="nb-login-field-error">A password must be provided.</span>
+              )}
+            </div>
+
+            <button type="submit" className="nb-login-btn" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <span className="nb-login-btn-spinner" />
+                  Authenticating…
+                </>
+              ) : "Sign In"}
+            </button>
+          </form>
+
+          {enableGoogleLogin && (
+            <>
+              <div className="nb-login-divider">
+                <span className="nb-login-divider-line" />
+                <span className="nb-login-divider-text">or</span>
+                <span className="nb-login-divider-line" />
+              </div>
+
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="nb-login-password-toggle"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                className="nb-login-google-btn"
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" className="nb-login-google-icon">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" />
+                  <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
+                  <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 22.3 12 23z" />
+                </svg>
+                Continue with Google
               </button>
+            </>
+          )}
+
+          {enableRegistration !== false && (
+            <div className="nb-login-footer">
+              Don't have an account?{" "}
+              <Link to="/register">Create one</Link>
             </div>
-            {passwordTried && !password.trim() && (
-              <span className="nb-login-field-error">A password must be provided.</span>
-            )}
-          </div>
-
-          <button type="submit" className="nb-login-btn" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <span className="nb-login-btn-spinner" />
-                Authenticating…
-              </>
-            ) : "Sign In"}
-          </button>
-        </form>
-
-        {enableGoogleLogin && (
-          <>
-            <div className="nb-login-divider">
-              <span className="nb-login-divider-line" />
-              <span className="nb-login-divider-text">or</span>
-              <span className="nb-login-divider-line" />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="nb-login-google-btn"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" className="nb-login-google-icon">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" />
-                <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
-                <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 22.3 12 23z" />
-              </svg>
-              Continue with Google
-            </button>
-          </>
-        )}
-
-        {enableRegistration !== false && (
-          <div className="nb-login-footer">
-            Don't have an account?{" "}
-            <Link to="/register">Create one</Link>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {isLoading && <LoadingOverlay message="Authenticating…" />}

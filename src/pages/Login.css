@@ -1,19 +1,21 @@
-/* ── zPanel Login — split-screen design, CSS-variable driven ── */
+/* ── zPanel Login — centered card layout ── */
 
 /* ── Wrapper ── */
 .nb-login-wrapper {
   min-height: 100dvh;
   width: 100%;
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   background: var(--zp-bg-deepest);
   position: relative;
   overflow: hidden;
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Ambient page glows behind everything */
-.nb-login-wrapper::before {
-  content: "";
+/* Ambient page glows */
+.nb-login-bg-glows {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -23,71 +25,27 @@
     radial-gradient(ellipse 50% 40% at 80% 100%, rgba(102, 166, 255, 0.08) 0%, transparent 45%);
 }
 
-/* ── Right showcase wall (desktop only) ── */
+/* ── Showcase wall (desktop only, absolute positioned) ── */
 .nb-login-showcase {
-  position: relative;
-  width: 60%;
-  min-width: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 45%;
+  height: 100%;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-}
-
-.nb-login-showcase-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
   pointer-events: none;
-  overflow: hidden;
-}
-
-.nb-login-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.35;
-  animation: nb-glow-pulse 6s ease-in-out infinite alternate;
-}
-.nb-login-glow-1 {
-  width: 420px;
-  height: 420px;
-  top: -120px;
-  left: -120px;
-  background: var(--zp-primary-500);
-  animation-delay: 0s;
-}
-.nb-login-glow-2 {
-  width: 360px;
-  height: 360px;
-  bottom: -100px;
-  right: -100px;
-  background: var(--zp-info-500);
-  animation-delay: -2s;
-}
-.nb-login-glow-3 {
-  width: 300px;
-  height: 300px;
-  top: 30%;
-  right: 10%;
-  background: var(--zp-success-500);
-  animation-delay: -4s;
-}
-
-@keyframes nb-glow-pulse {
-  0%   { opacity: 0.25; transform: scale(1); }
-  100% { opacity: 0.45; transform: scale(1.08); }
 }
 
 .nb-login-showcase-text {
   position: relative;
   z-index: 2;
-  padding: 2.5rem 3rem 1.5rem;
-  max-width: 340px;
+  padding: 3rem 4rem 2rem;
+  max-width: 300px;
 }
 
 .nb-login-showcase-headline {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--zp-text-primary);
   letter-spacing: -0.02em;
@@ -102,156 +60,37 @@
   line-height: 1.5;
 }
 
-/* Scrolling card wall */
-.nb-login-showcase-mask {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  overflow: hidden;
-  padding: 1rem 3rem 1.5rem;
-  -webkit-mask-image:
-    linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%),
-    linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-  mask-image:
-    linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%),
-    linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-}
-
-.nb-login-showcase-grid {
-  display: flex;
-  gap: 1rem;
-  height: 100%;
-  overflow: hidden;
-}
-
-.nb-login-showcase-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  flex: 1;
-  min-width: 0;
-  transform: rotateX(8deg) rotateZ(-8deg) scale(1.04);
-  transform-origin: center;
-  will-change: transform;
-}
-
-.nb-login-scroll-up {
-  animation: nb-scroll-up 52s linear infinite;
-}
-.nb-login-scroll-down {
-  animation: nb-scroll-down 64s linear infinite;
-}
-
-@keyframes nb-scroll-up {
-  0%   { transform: rotateX(8deg) rotateZ(-8deg) scale(1.04) translateY(0); }
-  100% { transform: rotateX(8deg) rotateZ(-8deg) scale(1.04) translateY(-50%); }
-}
-@keyframes nb-scroll-down {
-  0%   { transform: rotateX(8deg) rotateZ(-8deg) scale(1.04) translateY(-50%); }
-  100% { transform: rotateX(8deg) rotateZ(-8deg) scale(1.04) translateY(0); }
-}
-
-/* Individual showcase card */
-.nb-login-showcase-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.875rem 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(17, 20, 32, 0.55);
-  backdrop-filter: blur(12px);
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-  will-change: transform;
-}
-.nb-login-showcase-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(17, 20, 32, 0.75);
-}
-
-/* Gradient tile classes using CSS variables from index.css */
-.nb-login-showcase-card-tile {
-  width: 34px;
-  height: 34px;
-  border-radius: 0.625rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 16px -4px rgba(0, 0, 0, 0.4);
-}
-.nb-login-showcase-card-icon {
-  width: 16px;
-  height: 16px;
-  color: #ffffff;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
-}
-
-/* Gradient definitions using zPanel design tokens */
-.grad-paper { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-600), var(--zp-primary-800)); }
-.grad-purpur { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-700)); }
-.grad-vanilla { background: linear-gradient(135deg, var(--zp-text-secondary), var(--zp-text-muted), var(--zp-text-dim)); }
-.grad-spigot { background: linear-gradient(135deg, var(--zp-warning-500), var(--zp-warning-600), var(--zp-warning-700)); }
-.grad-fabric { background: linear-gradient(135deg, var(--zp-success-500), var(--zp-success-600), var(--zp-success-700)); }
-.grad-forge { background: linear-gradient(135deg, var(--zp-danger-500), var(--zp-danger-600), var(--zp-danger-700)); }
-.grad-bungeecord { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-700)); }
-.grad-velocity { background: linear-gradient(135deg, var(--zp-primary-500), var(--zp-primary-600), var(--zp-primary-800)); }
-.grad-console { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
-.grad-file { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
-.grad-sftp { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
-.grad-backups { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
-.grad-subusers { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
-.grad-players { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
-.grad-plugins { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
-.grad-mods { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
-.grad-world { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
-.grad-props { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
-.grad-playit { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
-.grad-cf { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
-.grad-docker { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
-.grad-java { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
-.grad-nodes { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
-.grad-api { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
-
-.nb-login-showcase-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.nb-login-showcase-card-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--zp-text-primary);
-  letter-spacing: -0.01em;
-}
-.nb-login-showcase-card-desc {
-  font-size: 0.6875rem;
-  color: var(--zp-text-muted);
-}
-
-/* ── Left form column ── */
+/* ── Centered card ── */
 .nb-login-main {
-  flex: 1;
-  max-width: 440px;
-  padding: 3rem 4rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   position: relative;
   z-index: 10;
+  width: 100%;
+  max-width: 440px;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-@media (max-width: 1023px) {
-  .nb-login-showcase {
-    display: none;
-  }
+.nb-login-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(17, 20, 32, 0.85);
+  border: 1px solid var(--zp-border);
+  border-radius: 1rem;
+  padding: 2.5rem;
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow:
+    0 24px 80px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+@media (min-width: 1024px) {
   .nb-login-main {
-    flex: 1;
-    padding: 2.5rem 1.5rem;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
+    padding: 0;
+  }
+  .nb-login-showcase {
+    pointer-events: auto;
   }
 }
 
@@ -261,6 +100,7 @@
   align-items: center;
   gap: 0.875rem;
   margin-bottom: 1.75rem;
+  text-align: left;
 }
 .nb-login-logo-img {
   width: 44px;
@@ -307,6 +147,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  text-align: left;
 }
 .nb-login-error::before {
   content: "";
@@ -329,9 +170,11 @@
 .nb-login-input-wrap {
   position: relative;
   margin-bottom: 0.875rem;
+  width: 100%;
 }
 .nb-login-input-field {
   position: relative;
+  width: 100%;
 }
 .nb-login-input-icon {
   position: absolute;
@@ -450,6 +293,8 @@
   align-items: center;
   gap: 0.75rem;
   margin: 1.5rem 0;
+  width: 100%;
+  text-align: left;
 }
 .nb-login-divider-line {
   flex: 1;
@@ -501,6 +346,7 @@
   margin-top: 1.5rem;
   font-size: 0.8125rem;
   color: var(--zp-text-muted);
+  width: 100%;
 }
 .nb-login-footer a {
   color: var(--zp-primary-400);
@@ -518,49 +364,5 @@
   color: var(--zp-text-muted);
   margin-bottom: 0.375rem;
   letter-spacing: 0.01em;
-}
-
-/* ── Reduced motion ── */
-@media (prefers-reduced-motion: reduce) {
-  .nb-login-glow { animation: none; }
-  .nb-login-showcase-col { animation: none; }
-  .nb-login-btn::after { animation: none; }
-  .nb-login-btn-spinner { animation: none; }
-}
-
-/* ── Register card (centered, no showcase wall) ── */
-.nb-login-card-register {
-  position: relative;
-  z-index: 10;
   width: 100%;
-  max-width: 440px;
-  margin: 2rem auto;
-  background: rgba(17, 20, 32, 0.85);
-  border: 1px solid var(--zp-border);
-  border-radius: 1rem;
-  padding: 2.5rem;
-  backdrop-filter: blur(20px) saturate(1.2);
-  box-shadow:
-    0 24px 80px -16px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  animation: nb-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes nb-card-in {
-  from { opacity: 0; transform: translateY(24px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* ── Success box ── */
-.nb-login-success {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.875rem;
-  background: rgba(54, 201, 143, 0.1);
-  border: 1px solid rgba(54, 201, 143, 0.25);
-  border-radius: 0.75rem;
-  color: var(--zp-success);
-  font-size: 0.8125rem;
-  margin-bottom: 1rem;
 }
