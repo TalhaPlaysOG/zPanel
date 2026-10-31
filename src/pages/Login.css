@@ -11,7 +11,7 @@
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Ambient page glows */
+/* Ambient page glows behind everything */
 .nb-login-wrapper::before {
   content: "";
   position: absolute;
@@ -109,10 +109,10 @@
   flex: 1;
   overflow: hidden;
   padding: 1rem 3rem 1.5rem;
-  mask-image:
+  -webkit-mask-image:
     linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%),
     linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-  -webkit-mask-image:
+  mask-image:
     linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%),
     linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
 }
@@ -170,6 +170,7 @@
   background: rgba(17, 20, 32, 0.75);
 }
 
+/* Gradient tile classes using CSS variables from index.css */
 .nb-login-showcase-card-tile {
   width: 34px;
   height: 34px;
@@ -179,13 +180,38 @@
   justify-content: center;
   box-shadow: 0 0 16px -4px rgba(0, 0, 0, 0.4);
 }
-
 .nb-login-showcase-card-icon {
   width: 16px;
   height: 16px;
   color: #ffffff;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
 }
+
+/* Gradient definitions using zPanel design tokens */
+.grad-paper { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-600), var(--zp-primary-800)); }
+.grad-purpur { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-700)); }
+.grad-vanilla { background: linear-gradient(135deg, var(--zp-text-secondary), var(--zp-text-muted), var(--zp-text-dim)); }
+.grad-spigot { background: linear-gradient(135deg, var(--zp-warning-500), var(--zp-warning-600), var(--zp-warning-700)); }
+.grad-fabric { background: linear-gradient(135deg, var(--zp-success-500), var(--zp-success-600), var(--zp-success-700)); }
+.grad-forge { background: linear-gradient(135deg, var(--zp-danger-500), var(--zp-danger-600), var(--zp-danger-700)); }
+.grad-bungeecord { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-700)); }
+.grad-velocity { background: linear-gradient(135deg, var(--zp-primary-500), var(--zp-primary-600), var(--zp-primary-800)); }
+.grad-console { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
+.grad-file { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
+.grad-sftp { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
+.grad-backups { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
+.grad-subusers { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
+.grad-players { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
+.grad-plugins { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
+.grad-mods { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
+.grad-world { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
+.grad-props { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
+.grad-playit { background: linear-gradient(135deg, var(--zp-warning-400), var(--zp-warning-500), var(--zp-warning-600)); }
+.grad-cf { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
+.grad-docker { background: linear-gradient(135deg, var(--zp-success-400), var(--zp-success-500), var(--zp-success-600)); }
+.grad-java { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
+.grad-nodes { background: linear-gradient(135deg, var(--zp-info-400), var(--zp-info-500), var(--zp-info-600)); }
+.grad-api { background: linear-gradient(135deg, var(--zp-primary-400), var(--zp-primary-500), var(--zp-primary-600)); }
 
 .nb-login-showcase-card-body {
   display: flex;
@@ -538,4 +564,3 @@
   font-size: 0.8125rem;
   margin-bottom: 1rem;
 }
-

@@ -11,42 +11,42 @@ import {
   Server, User, Lock, Eye, EyeOff, Terminal, Folder, Shield, Database,
   RefreshCw, Play, Users, Cloud, Globe, Zap, Layers, Monitor, Wifi, Code2,
   Save, Puzzle, Box, Map, SlidersHorizontal, Sparkles, FastForward, Feather,
-  AlertCircle
 } from "lucide-react";
 import "./Login.css";
 
+// Showcase cards with CSS variable class names for gradient tiles
 const SHOWCASE_CARDS = [
-  { id: "paper", label: "Paper", desc: "High Performance", icon: Zap, gradient: "from-zp-primary-500 via-zp-primary-600 to-zp-primary-800" },
-  { id: "purpur", label: "Purpur", desc: "Paper + Extra Features", icon: Sparkles, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-700" },
-  { id: "vanilla", label: "Vanilla", desc: "Official Minecraft", icon: Server, gradient: "from-zp-text-secondary via-zp-text-muted to-zp-text-dim" },
-  { id: "spigot", label: "Spigot", desc: "Classic Plugins", icon: Wrench, gradient: "from-zp-warning-500 via-zp-warning-600 to-zp-warning-700" },
-  { id: "fabric", label: "Fabric", desc: "Lightweight Mods", icon: Feather, gradient: "from-zp-success-500 via-zp-success-600 to-zp-success-700" },
-  { id: "forge", label: "Forge", desc: "Classic Modpack", icon: Wrench, gradient: "from-zp-danger-500 via-zp-danger-600 to-zp-danger-700" },
-  { id: "bungeecord", label: "BungeeCord", desc: "Classic Proxy", icon: Network, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-700" },
-  { id: "velocity", label: "Velocity", desc: "Next-gen Proxy", icon: FastForward, gradient: "from-zp-primary-500 via-zp-primary-600 to-zp-primary-800" },
-  { id: "live-console", label: "Live Console", desc: "Real-time streaming", icon: Terminal, gradient: "from-zp-primary-400 via-zp-primary-500 to-zp-primary-600" },
-  { id: "file-manager", label: "File Manager", desc: "Edit, upload, organize", icon: Folder, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-600" },
-  { id: "sftp", label: "SFTP Access", desc: "Secure file transfer", icon: Shield, gradient: "from-zp-success-400 via-zp-success-500 to-zp-success-600" },
-  { id: "backups", label: "Backups", desc: "Protect your worlds", icon: Database, gradient: "from-zp-warning-400 via-zp-warning-500 to-zp-warning-600" },
-  { id: "sub-users", label: "Sub-Users", desc: "Share server access", icon: Users, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-600" },
-  { id: "players", label: "Player Manager", desc: "Manage your community", icon: Users, gradient: "from-zp-primary-400 via-zp-primary-500 to-zp-primary-600" },
-  { id: "plugins", label: "Plugins", desc: "Extend functionality", icon: Puzzle, gradient: "from-zp-success-400 via-zp-success-500 to-zp-success-600" },
-  { id: "mods", label: "Mods", desc: "Install modpacks", icon: Box, gradient: "from-zp-warning-400 via-zp-warning-500 to-zp-warning-600" },
-  { id: "world-manager", label: "World Manager", desc: "Control your maps", icon: Map, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-600" },
-  { id: "server-properties", label: "Server Properties", desc: "Configure settings", icon: SlidersHorizontal, gradient: "from-zp-primary-400 via-zp-primary-500 to-zp-primary-600" },
-  { id: "playit", label: "Playit.gg Tunnel", desc: "Expose your server", icon: Globe, gradient: "from-zp-warning-400 via-zp-warning-500 to-zp-warning-600" },
-  { id: "cloudflare", label: "Cloudflare Tunnel", desc: "Secure remote access", icon: Cloud, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-600" },
-  { id: "docker-local", label: "Docker & Local", desc: "Flexible runtimes", icon: Layers, gradient: "from-zp-success-400 via-zp-success-500 to-zp-success-600" },
-  { id: "java-runtime", label: "Java Runtime", desc: "Java 17/21/25", icon: Monitor, gradient: "from-zp-primary-400 via-zp-primary-500 to-zp-primary-600" },
-  { id: "nodes", label: "Nodes", desc: "Multi-node hosting", icon: Wifi, gradient: "from-zp-info-400 via-zp-info-500 to-zp-info-600" },
-  { id: "api-keys", label: "API Keys", desc: "Programmatic access", icon: Code2, gradient: "from-zp-primary-400 via-zp-primary-500 to-zp-primary-600" },
+  { id: "paper", label: "Paper", desc: "High Performance", icon: Zap, grad: "grad-paper" },
+  { id: "purpur", label: "Purpur", desc: "Paper + Extra Features", icon: Sparkles, grad: "grad-purpur" },
+  { id: "vanilla", label: "Vanilla", desc: "Official Minecraft", icon: Server, grad: "grad-vanilla" },
+  { id: "spigot", label: "Spigot", desc: "Classic Plugins", icon: Wrench, grad: "grad-spigot" },
+  { id: "fabric", label: "Fabric", desc: "Lightweight Mods", icon: Feather, grad: "grad-fabric" },
+  { id: "forge", label: "Forge", desc: "Classic Modpack", icon: Wrench, grad: "grad-forge" },
+  { id: "bungeecord", label: "BungeeCord", desc: "Classic Proxy", icon: Network, grad: "grad-bungeecord" },
+  { id: "velocity", label: "Velocity", desc: "Next-gen Proxy", icon: FastForward, grad: "grad-velocity" },
+  { id: "live-console", label: "Live Console", desc: "Real-time streaming", icon: Terminal, grad: "grad-console" },
+  { id: "file-manager", label: "File Manager", desc: "Edit, upload, organize", icon: Folder, grad: "grad-file" },
+  { id: "sftp", label: "SFTP Access", desc: "Secure file transfer", icon: Shield, grad: "grad-sftp" },
+  { id: "backups", label: "Backups", desc: "Protect your worlds", icon: Database, grad: "grad-backups" },
+  { id: "sub-users", label: "Sub-Users", desc: "Share server access", icon: Users, grad: "grad-subusers" },
+  { id: "players", label: "Player Manager", desc: "Manage your community", icon: Users, grad: "grad-players" },
+  { id: "plugins", label: "Plugins", desc: "Extend functionality", icon: Puzzle, grad: "grad-plugins" },
+  { id: "mods", label: "Mods", desc: "Install modpacks", icon: Box, grad: "grad-mods" },
+  { id: "world-manager", label: "World Manager", desc: "Control your maps", icon: Map, grad: "grad-world" },
+  { id: "server-properties", label: "Server Properties", desc: "Configure settings", icon: SlidersHorizontal, grad: "grad-props" },
+  { id: "playit", label: "Playit.gg Tunnel", desc: "Expose your server", icon: Globe, grad: "grad-playit" },
+  { id: "cloudflare", label: "Cloudflare Tunnel", desc: "Secure remote access", icon: Cloud, grad: "grad-cf" },
+  { id: "docker-local", label: "Docker & Local", desc: "Flexible runtimes", icon: Layers, grad: "grad-docker" },
+  { id: "java-runtime", label: "Java Runtime", desc: "Java 17/21/25", icon: Monitor, grad: "grad-java" },
+  { id: "nodes", label: "Nodes", desc: "Multi-node hosting", icon: Wifi, grad: "grad-nodes" },
+  { id: "api-keys", label: "API Keys", desc: "Programmatic access", icon: Code2, grad: "grad-api" },
 ];
 
 const ShowcaseCard = ({ card }: { card: (typeof SHOWCASE_CARDS)[number] }) => {
   const Icon = card.icon;
   return (
     <div className="nb-login-showcase-card">
-      <div className="nb-login-showcase-card-tile" style={{ background: card.gradient }}>
+      <div className={`nb-login-showcase-card-tile ${card.grad}`}>
         <Icon className="nb-login-showcase-card-icon" />
       </div>
       <div className="nb-login-showcase-card-body">
