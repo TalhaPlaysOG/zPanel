@@ -52,26 +52,14 @@ export default function Register() {
 
   return (
     <div className="nb-login-wrapper">
-      {/* Animated background grid */}
-      <div className="nb-login-grid" />
-
-      {/* Floating orbs */}
-      <div className="nb-login-orb nb-login-orb-1" />
-      <div className="nb-login-orb nb-login-orb-2" />
-
-      {/* Registration Card */}
-      <div className="nb-login-card">
-        {/* Header Logo & Title */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", marginBottom: "1.75rem" }}>
+      {/* Registration Card — centered, no showcase wall */}
+      <div className="nb-login-card-register">
+        <div className="nb-login-brand">
           {panelLogo ? (
-            <img
-              src={panelLogo}
-              alt="Logo"
-              style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "contain" }}
-            />
+            <img src={panelLogo} alt="Logo" className="nb-login-logo-img" />
           ) : (
             <div className="nb-login-logo">
-              <Server size={20} color="#a78bfa" />
+              <Server size={20} className="nb-login-logo-icon" />
             </div>
           )}
           <div>
@@ -80,42 +68,25 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Disabled warning */}
         {enableRegistration === false && (
-          <div className="nb-login-error" style={{ background: "rgba(245, 158, 11, 0.1)", borderColor: "rgba(245, 158, 11, 0.3)", color: "#fbbf24" }}>
+          <div className="nb-login-error" style={{ background: "rgba(237, 98, 111, 0.1)", borderColor: "rgba(237, 98, 111, 0.25)", color: "var(--zp-danger)" }}>
             User registration is currently disabled by administrator.
           </div>
         )}
 
-        {/* Error */}
         {error && <div className="nb-login-error">{error}</div>}
 
-        {/* Success */}
         {success && (
-          <div
-            style={{
-              padding: "0.625rem 0.875rem",
-              background: "rgba(16, 185, 129, 0.1)",
-              border: "1px solid rgba(16, 185, 129, 0.25)",
-              borderRadius: "0.5rem",
-              color: "#34d399",
-              fontSize: "0.8125rem",
-              marginBottom: "1rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-          >
+          <div className="nb-login-success">
             <CheckCircle size={16} />
             <span>{success}</span>
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleRegister} autoComplete="off">
+        <form onSubmit={handleRegister} autoComplete="off" noValidate>
           <div className="nb-login-input-wrap">
             <label className="nb-login-label">Username</label>
-            <div style={{ position: "relative" }}>
+            <div className="nb-login-input-field">
               <User className="nb-login-input-icon" />
               <input
                 type="text"
@@ -132,7 +103,7 @@ export default function Register() {
 
           <div className="nb-login-input-wrap">
             <label className="nb-login-label">Password</label>
-            <div style={{ position: "relative" }}>
+            <div className="nb-login-input-field">
               <Lock className="nb-login-input-icon" />
               <input
                 type="password"
@@ -149,7 +120,7 @@ export default function Register() {
 
           <div className="nb-login-input-wrap">
             <label className="nb-login-label">Confirm Password</label>
-            <div style={{ position: "relative" }}>
+            <div className="nb-login-input-field">
               <Lock className="nb-login-input-icon" />
               <input
                 type="password"
@@ -183,4 +154,3 @@ export default function Register() {
     </div>
   );
 }
-
