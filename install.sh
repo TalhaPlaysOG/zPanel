@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # =========================================================
-# zPanel - Automated Installation & Management Script
-# Repository: https://github.com/TalhaPlaysOG/zPanel
+# NexoraPanel - Automated Installation & Management Script
+# Repository: https://github.com/TalhaPlaysOG/NexoraPanel
 # =========================================================
 
 # Ensure standard input is mapped to controlling terminal for reliable interactive prompts
@@ -19,7 +19,7 @@ set +e
 cleanup_on_exit() {
     local exit_code=$?
     # Clean up any temporary node installation directory
-    rm -rf /tmp/zpanel_node_install 2>/dev/null || true
+    rm -rf /tmp/nexorapanel_node_install 2>/dev/null || true
     if [ "$exit_code" -ne 0 ]; then
         log_error "Installer exited with code $exit_code. Some operations may not have completed."
     fi
@@ -30,10 +30,10 @@ trap cleanup_on_exit EXIT
 # ─────────────────────────────────────────────
 #  CONSTANTS & PATHS
 # ─────────────────────────────────────────────
-REPO_URL="https://github.com/TalhaPlaysOG/zPanel.git"
-DEFAULT_INSTALL_DIR="/opt/zpanel"
-PM2_APP_NAME="zpanel"
-PANEL_PORT="6767"
+REPO_URL="https://github.com/TalhaPlaysOG/NexoraPanel.git"
+DEFAULT_INSTALL_DIR="/opt/nexorapanel"
+PM2_APP_NAME="nexorapanel"
+PANEL_PORT="3001"
 CF_SERVICE="cloudflared"
 
 # ─────────────────────────────────────────────
@@ -64,15 +64,93 @@ log_divider() { echo -e "  ${DIM}───────────────�
 print_banner() {
     clear
     echo -e "${CYAN}${BOLD}"
-    echo "  ╔══════════════════════════════════════════════════════════════╗"
+    echo "  ╔═════════════════════════════════════════════════════════════╗"
     echo "  ║                                                              ║"
-    echo "  ║                           zPanel                             ║"
-    echo "  ║                  SERVER MANAGEMENT SYSTEM                    ║"
+    echo "  ║                       NEXORAPANEL                            ║"
+    echo "  ║               GAME SERVER MANAGEMENT PANEL                   ║"
     echo "  ║                                                              ║"
-    echo "  ║                    Production Installer                      ║"
-    echo "  ║                    Default Port: 6767                        ║"
+    echo "  ║                     Production Installer                     ║"
+    echo "  ║                    Default Port: 3001                        ║"
     echo "  ║                                                              ║"
-    echo "  ╚══════════════════════════════════════════════════════════════╝"
+    echo "  ╚═════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# ─────────────────────────────────────────────
+#  SYSTEM INFORMATION DETECTION
+# ─────────────────────────────────────────────
+detect_system_info() {
+    OS_DISPLAY="Unknown"
+    ARCH_DISPLAY="$(uname -m 2>/dev/null || echo 'unknown')"
+    MEM_USED="Unknown"
+    MEM_TOTAL="Unknown"
+    IP_ADDR="Unknown"
+    PANEL_STATUS="NOT INSTALLED"
+    PANEL_PORT_DISPLAY="3001"
+
+    # OS detection
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_DISPLAY="${NAME} ${VERSION_ID:-}"
+    elif command -v sw_vers &>/dev/null; then
+        OS_DISPLAY="$(sw_vers -productName) $(sw_vers -productVersion)"
+    fi
+
+    # Memory detection (Linux)
+    if [ -f /proc/meminfo ]; then
+        MEM_TOTAL_KB=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo "0")
+        MEM_AVAIL_KB=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || echo "0")
+        if [ "$MEM_TOTAL_KB" -gt 0 ] 2>/dev/null; then
+            MEM_TOTAL=$((MEM_TOTAL_KB / 1024))" MB"
+            MEM_USED=$(( (MEM_TOTAL_KB - MEM_AVAIL_KB) / 1024 ))" MB"
+        fi
+    elif command -v vm_stat &>/dev/null; then
+        # macOS
+        MEM_TOTAL="$(vm_stat | head -1 | awk '{print $NF}') MB"
+    fi
+
+    # IP detection
+    if command -v ip &>/dev/null; then
+        IP_ADDR=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)
+    elif command -v hostname &>/dev/null; then
+        IP_ADDR=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "Unknown")
+    fi
+    [ -z "$IP_ADDR" ] && IP_ADDR="Unknown"
+
+    # Panel status
+    if command -v pm2 &>/dev/null && pm2 list 2>/dev/null | grep -q "nexorapanel"; then
+        if curl -fsSL --max-time 2 "http://127.0.0.1:$PANEL_PORT" &>/dev/null; then
+            PANEL_STATUS="ONLINE"
+        else
+            PANEL_STATUS="DEGRADED"
+        fi
+    elif [ -d "$DEFAULT_INSTALL_DIR" ] && [ -f "$DEFAULT_INSTALL_DIR/package.json" ]; then
+        PANEL_STATUS="INSTALLED"
+    fi
+}
+
+# ─────────────────────────────────────────────
+#  STANDARD NEXORAPANEL HEADER
+# ─────────────────────────────────────────────
+print_system_header() {
+    detect_system_info
+    clear
+    echo -e "${CYAN}${BOLD}"
+    echo "  ╔═════════════════════════════════════════════════════════════╗"
+    echo "  ║                                                              ║"
+    echo "  ║                       NEXORAPANEL                            ║"
+    echo "  ║              GAME SERVER MANAGEMENT PANEL                    ║"
+    echo "  ║                    v1.0.0 · Production                       ║"
+    echo "  ║                                                              ║"
+    echo "  ╠═════════════════════════════════════════════════════════════╣"
+    echo "  ║  System  : ${OS_DISPLAY}${BOLD}${CYAN}"
+    printf "  ║  Memory  : ${MEM_USED} / ${MEM_TOTAL}${BOLD}${CYAN}"
+    echo ""
+    printf "  ║  IP      : ${IP_ADDR}${BOLD}${CYAN}"
+    echo ""
+    printf "  ║  Status  : ${PANEL_STATUS} · Port ${PANEL_PORT}${BOLD}${CYAN}"
+    echo ""
+    echo "  ╚═════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
 
@@ -85,7 +163,7 @@ check_privileges() {
             SUDO="sudo"
         else
             log_error "This operation requires root or sudo privileges."
-            echo -e "  Please run with: sudo bash <(curl -fsSL https://raw.githubusercontent.com/TalhaPlaysOG/zPanel/main/install.sh)"
+            echo -e "  Please run with: sudo bash <(curl -fsSL https://raw.githubusercontent.com/TalhaPlaysOG/NexoraPanel/main/install.sh)"
             exit 1
         fi
     else
@@ -145,12 +223,12 @@ find_panel_directory() {
         echo "$DEFAULT_INSTALL_DIR"
         return 0
     fi
-    if [ -d "$HOME/zpanel" ] && [ -f "$HOME/zpanel/package.json" ]; then
-        echo "$HOME/zpanel"
+    if [ -d "$HOME/nexorapanel" ] && [ -f "$HOME/nexorapanel/package.json" ]; then
+        echo "$HOME/nexorapanel"
         return 0
     fi
-    if [ -d "./zPanel" ] && [ -f "./zPanel/package.json" ]; then
-        echo "$(pwd)/zPanel"
+    if [ -d "./NexoraPanel" ] && [ -f "./NexoraPanel/package.json" ]; then
+        echo "$(pwd)/NexoraPanel"
         return 0
     fi
     return 1
@@ -181,7 +259,7 @@ install_system_packages() {
 install_nodejs() {
     log_step "Verifying Node.js runtime..."
     local NEED_NODE=0
-    local NODE_INSTALL_DIR="/tmp/zpanel_node_install"
+    local NODE_INSTALL_DIR="/tmp/nexorapanel_node_install"
     local NODE_ARCHIVE=""
     local NODE_VER_RAW=""
     local NODE_MAJOR=0
@@ -551,9 +629,9 @@ setup_application_env() {
     if [ -f "$env_file" ]; then
         log_info "Existing .env file found. Preserving current secrets..."
         if grep -q "^PORT=" "$env_file"; then
-            sed -i "s/^PORT=.*/PORT=6767/" "$env_file"
+            sed -i "s/^PORT=.*/PORT=3001/" "$env_file"
         else
-            echo "PORT=6767" >> "$env_file"
+            echo "PORT=3001" >> "$env_file"
         fi
         if ! grep -q "^DEFAULT_RUNTIME=" "$env_file"; then
             echo "DEFAULT_RUNTIME=$AUTO_RUNTIME" >> "$env_file"
@@ -561,10 +639,10 @@ setup_application_env() {
     else
         log_info "Generating production .env..."
         GENERATED_SECRET=$(head -c 32 /dev/urandom 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9' | head -c 48)
-        [ -z "$GENERATED_SECRET" ] && GENERATED_SECRET="zpanel-jwt-$(date +%s%N)"
+        [ -z "$GENERATED_SECRET" ] && GENERATED_SECRET="nexorapanel-jwt-$(date +%s%N)"
         cat > "$env_file" << ENVEOF
-# zPanel Production Environment
-PORT=6767
+# NexoraPanel Production Environment
+PORT=3001
 DEFAULT_RUNTIME=${AUTO_RUNTIME}
 ENABLE_DOCKER=false
 JWT_SECRET=${GENERATED_SECRET}
@@ -578,7 +656,7 @@ ENVEOF
     setup_java_env "$env_file"
 
     chmod 600 "$env_file" 2>/dev/null || true
-    log_success ".env configured (Port 6767)."
+    log_success ".env configured (Port 3001)."
 }
 
 # ─────────────────────────────────────────────
@@ -600,11 +678,11 @@ check_panel_health() {
 }
 
 # ─────────────────────────────────────────────
-#  [1] INSTALL zPanel (Node.js + PM2)
+#  [1] INSTALL NexoraPanel (Node.js + PM2)
 # ─────────────────────────────────────────────
-install_zpanel() {
+install_nexorapanel() {
     local INSTALL_MODE="${1:-nodejs}"
-    print_banner
+    print_system_header
     case "$INSTALL_MODE" in
         docker)
             echo -e "  ${BOLD}${CYAN}INSTALLATION — Node.js + Docker Support${NC}\n"
@@ -635,7 +713,7 @@ install_zpanel() {
         TARGET_DIR="$DEFAULT_INSTALL_DIR"
         log_info "Using existing directory: $TARGET_DIR"
     else
-        log_step "Fetching zPanel source code from GitHub..."
+        log_step "Fetching NexoraPanel source code from GitHub..."
         $SUDO mkdir -p "$TARGET_DIR"
         $SUDO chown -R "$(whoami)" "$TARGET_DIR" 2>/dev/null || true
         if ! git clone "$REPO_URL" "$TARGET_DIR"; then
@@ -687,7 +765,7 @@ install_zpanel() {
 module.exports = {
   apps: [
     {
-      name: "zpanel",
+      name: "nexorapanel",
       script: "npm",
       args: "start",
       cwd: __dirname,
@@ -697,7 +775,7 @@ module.exports = {
       max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
-        PORT: 6767
+        PORT: 3001
       }
     }
   ]
@@ -726,10 +804,10 @@ ECOSYSTEM
     npm run createuser || log_warning "Admin creation completed with notice. Run option [4] anytime to create additional administrators."
 
     # Start application with PM2
-    log_step "Starting zPanel under PM2 management..."
+    log_step "Starting NexoraPanel under PM2 management..."
     pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
     if ! pm2 start ecosystem.config.cjs; then
-        log_error "PM2 failed to launch zPanel."
+        log_error "PM2 failed to launch NexoraPanel."
         exit 1
     fi
     pm2 save 2>/dev/null || true
@@ -747,10 +825,10 @@ ECOSYSTEM
     log_step "Verifying application availability on port $PANEL_PORT..."
     if check_panel_health "$PANEL_PORT"; then
         PANEL_STATUS="Running"
-        log_success "zPanel is actively listening on http://127.0.0.1:$PANEL_PORT"
+        log_success "NexoraPanel is actively listening on http://127.0.0.1:$PANEL_PORT"
     else
         PANEL_STATUS="Starting (Pending)"
-        log_warning "Application started, but not yet responding on port $PANEL_PORT. Check logs using: pm2 logs zpanel"
+        log_warning "Application started, but not yet responding on port $PANEL_PORT. Check logs using: pm2 logs nexorapanel"
     fi
 
     # Final Installation Summary
@@ -760,8 +838,8 @@ ECOSYSTEM
     echo "  ╔══════════════════════════════════════════════════════════════╗"
     echo "  ║              INSTALLATION COMPLETED                          ║"
     echo "  ╠══════════════════════════════════════════════════════════════╣"
-    printf  "  ║  %-20s : %-37s ║\n" "Panel Name" "zPanel"
-    printf  "  ║  %-20s : %-37s ║\n" "Local URL" "http://127.0.0.1:6767"
+    printf  "  ║  %-20s : %-37s ║\n" "Panel Name" "NexoraPanel"
+    printf  "  ║  %-20s : %-37s ║\n" "Local URL" "http://127.0.0.1:3001"
     printf  "  ║  %-20s : %-37s ║\n" "Process Manager" "PM2"
     printf  "  ║  %-20s : %-37s ║\n" "Process Status" "$PANEL_STATUS"
     printf  "  ║  %-20s : %-37s ║\n" "Auto Startup" "Enabled"
@@ -770,17 +848,101 @@ ECOSYSTEM
 }
 
 # ─────────────────────────────────────────────
-#  Install zPanel with Docker Support
+#  Install NexoraPanel with Docker Support
 # ─────────────────────────────────────────────
-install_zpanel_docker() {
-    install_zpanel "docker"
+install_nexorapanel_docker() {
+    install_nexorapanel "docker"
 }
 
 # ─────────────────────────────────────────────
-#  Install zPanel Development Mode
+#  Node Installation (Wings Node)
 # ─────────────────────────────────────────────
-install_zpanel_dev() {
-    install_zpanel "dev"
+node_installation() {
+    print_system_header
+    echo -e "  ${BOLD}${CYAN}NODE INSTALLATION${NC}\n"
+    log_divider
+
+    check_privileges
+    check_network
+    detect_os
+    install_system_packages
+    install_nodejs
+    install_pm2
+
+    echo ""
+    log_step "Node Configuration"
+    echo -e "  ${BOLD}This will register a new Wings node with NexoraPanel.${NC}"
+    echo ""
+
+    read -p "  Node name: " NODE_NAME
+    if [ -z "$NODE_NAME" ]; then
+        log_error "Node name is required."
+        return 1
+    fi
+
+    read -p "  Node hostname (e.g. 1.2.3.4 or node.example.com): " NODE_HOST
+    if [ -z "$NODE_HOST" ]; then
+        log_error "Node hostname is required."
+        return 1
+    fi
+
+    read -p "  API port (default 8080): " NODE_API_PORT
+    NODE_API_PORT=${NODE_API_PORT:-8080}
+
+    read -p "  Memory limit in MB (default 8192): " NODE_MEMORY
+    NODE_MEMORY=${NODE_MEMORY:-8192}
+
+    read -p "  Disk limit in MB (default 51200): " NODE_DISK
+    NODE_DISK=${NODE_DISK:-51200}
+
+    read -p "  Location (default default): " NODE_LOCATION
+    NODE_LOCATION=${NODE_LOCATION:-default}
+
+    read -p "  Enable SSL? (y/N): " NODE_SSL
+    if [[ "$NODE_SSL" =~ ^[Yy]$ ]]; then
+        NODE_SSL="true"
+    else
+        NODE_SSL="false"
+    fi
+
+    echo ""
+    log_step "Creating node '$NODE_NAME'..."
+
+    # Generate a registration token
+    NODE_TOKEN=$(openssl rand -hex 24 2>/dev/null || cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 48 | head -1)
+
+    # Create the node via API if panel is running, otherwise save for later
+    if command -v curl &>/dev/null && curl -sf http://127.0.0.1:$PANEL_PORT/api/nodes 2>/dev/null | grep -q "servers"; then
+        log_info "Panel is running. Registering node via API..."
+        API_RESPONSE=$(curl -s -X POST http://127.0.0.1:$PANEL_PORT/api/nodes \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$NODE_NAME\",\"hostname\":\"$NODE_HOST\",\"apiUrl\":\"http://$NODE_HOST:$NODE_API_PORT\",\"token\":\"$NODE_TOKEN\",\"ssl\":$NODE_SSL,\"apiPort\":$NODE_API_PORT,\"memory\":$NODE_MEMORY,\"disk\":$NODE_DISK,\"location\":\"$NODE_LOCATION\"}" 2>/dev/null)
+        
+        if echo "$API_RESPONSE" | grep -q '"success":true'; then
+            log_success "Node '$NODE_NAME' registered successfully."
+            log_info "Node token: $NODE_TOKEN"
+            log_info "Use this token when installing Wings on the remote node."
+        else
+            log_warning "API registration failed. Saving node configuration locally."
+            echo "$NODE_NAME|$NODE_HOST|$NODE_API_PORT|$NODE_TOKEN|$NODE_SSL|$NODE_MEMORY|$NODE_DISK|$NODE_LOCATION" >> /etc/nexorapanel/nodes.conf 2>/dev/null || true
+        fi
+    else
+        log_warning "Panel is not running. Saving node configuration for later registration."
+        echo "$NODE_NAME|$NODE_HOST|$NODE_API_PORT|$NODE_TOKEN|$NODE_SSL|$NODE_MEMORY|$NODE_DISK|$NODE_LOCATION" >> /etc/nexorapanel/nodes.conf 2>/dev/null || true
+    fi
+
+    log_success "Node installation configuration complete."
+    echo ""
+    echo -e "  ${BOLD}Node Summary:${NC}"
+    echo -e "    Name:     $NODE_NAME"
+    echo -e "    Host:     $NODE_HOST"
+    echo -e "    API Port: $NODE_API_PORT"
+    echo -e "    Memory:   ${NODE_MEMORY} MB"
+    echo -e "    Disk:     ${NODE_DISK} MB"
+    echo -e "    Location: $NODE_LOCATION"
+    echo -e "    SSL:      $NODE_SSL"
+    echo -e "    Token:    $NODE_TOKEN"
+    echo ""
 }
 
 # ─────────────────────────────────────────────
@@ -848,7 +1010,7 @@ setup_cloudflare_tunnel() {
     set +x
 
     # Step 2: Ask for the Tunnel Token (accept a raw token or a full command)
-    print_banner
+    print_system_header
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL SETUP${NC}\n"
     log_divider
     echo ""
@@ -1042,7 +1204,7 @@ EOF
 
 # Check Tunnel Status
 cf_check_status() {
-    print_banner
+    print_system_header
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL STATUS${NC}\n"
     log_divider
     echo ""
@@ -1094,7 +1256,7 @@ cf_check_status() {
 
 # Reconnect Tunnel
 cf_reconnect_tunnel() {
-    print_banner
+    print_system_header
     echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL — Reconnect${NC}\n"
     log_divider
     check_privileges
@@ -1159,7 +1321,7 @@ show_cloudflare_menu() {
             CF_TOKEN="${GREEN}Configured${NC}"
         fi
 
-        print_banner
+        print_system_header
         echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL${NC}\n"
         log_divider
         echo ""
@@ -1211,7 +1373,7 @@ cloudflare_tunnel_option() {
 
     # If already installed and service is currently running, offer menu or token update
     if command -v cloudflared &>/dev/null && systemctl is-active --quiet cloudflared 2>/dev/null; then
-        print_banner
+        print_system_header
         echo -e "  ${BOLD}${CYAN}CLOUDFLARE TUNNEL${NC}\n"
         log_divider
         echo ""
@@ -1265,11 +1427,11 @@ cloudflare_tunnel_option() {
 }
 
 # ─────────────────────────────────────────────
-#  [3] UPDATE zPanel
+#  [3] UPDATE NexoraPanel
 # ─────────────────────────────────────────────
-update_zpanel() {
-    print_banner
-    echo -e "  ${BOLD}${CYAN}UPDATE zPanel${NC}\n"
+update_nexorapanel() {
+    print_system_header
+    echo -e "  ${BOLD}${CYAN}UPDATE NexoraPanel${NC}\n"
     log_divider
 
     check_privileges
@@ -1278,7 +1440,7 @@ update_zpanel() {
     # Detect current installation
     PANEL_DIR=$(find_panel_directory)
     if [ -z "$PANEL_DIR" ]; then
-        log_error "No zPanel installation found. Please install zPanel first (Option 1)."
+        log_error "No NexoraPanel installation found. Please install NexoraPanel first (Option 1)."
         return 1
     fi
 
@@ -1294,7 +1456,7 @@ update_zpanel() {
     # Create backup
     local BACKUP_TIME
     BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
-    local BACKUP_DIR="/tmp/zpanel_backup_${BACKUP_TIME}"
+    local BACKUP_DIR="/tmp/nexorapanel_backup_${BACKUP_TIME}"
     mkdir -p "$BACKUP_DIR"
 
     log_step "Backing up configuration and data before update..."
@@ -1311,11 +1473,11 @@ update_zpanel() {
     cd "$PANEL_DIR" || { log_error "Failed to enter directory $PANEL_DIR"; return 1; }
 
     # Stop panel before update
-    log_step "Stopping zPanel before update..."
+    log_step "Stopping NexoraPanel before update..."
     if command -v pm2 &>/dev/null; then
         pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
         pm2 save 2>/dev/null || true
-        log_success "zPanel stopped."
+        log_success "NexoraPanel stopped."
     fi
 
     # Fetch latest version
@@ -1363,10 +1525,10 @@ update_zpanel() {
     # Health check
     log_step "Verifying panel is responding after update..."
     if check_panel_health "$PANEL_PORT"; then
-        log_success "Update completed successfully! zPanel is active on port $PANEL_PORT."
+        log_success "Update completed successfully! NexoraPanel is active on port $PANEL_PORT."
         rm -rf "$BACKUP_DIR"
     else
-        log_warning "Update completed but panel may still be loading. Check: pm2 logs zpanel"
+        log_warning "Update completed but panel may still be loading. Check: pm2 logs nexorapanel"
         log_info "Backup preserved at $BACKUP_DIR in case rollback is needed."
     fi
 }
@@ -1390,13 +1552,13 @@ rollback_update() {
 #  [4] CREATE ADMIN USER
 # ─────────────────────────────────────────────
 create_admin_user() {
-    print_banner
+    print_system_header
     echo -e "  ${BOLD}${CYAN}CREATE ADMIN USER${NC}\n"
     log_divider
 
     PANEL_DIR=$(find_panel_directory)
     if [ -z "$PANEL_DIR" ]; then
-        log_error "zPanel installation was not found. Please install the panel first."
+        log_error "NexoraPanel installation was not found. Please install the panel first."
         return 1
     fi
 
@@ -1409,16 +1571,16 @@ create_admin_user() {
 }
 
 # ─────────────────────────────────────────────
-#  [5] RESTART zPanel
+#  [5] RESTART NexoraPanel
 # ─────────────────────────────────────────────
-restart_zpanel() {
-    print_banner
-    echo -e "  ${BOLD}${CYAN}RESTART zPanel${NC}\n"
+restart_nexorapanel() {
+    print_system_header
+    echo -e "  ${BOLD}${CYAN}RESTART NexoraPanel${NC}\n"
     log_divider
 
     PANEL_DIR=$(find_panel_directory)
     if [ -z "$PANEL_DIR" ]; then
-        log_error "zPanel installation was not found."
+        log_error "NexoraPanel installation was not found."
         return 1
     fi
 
@@ -1435,59 +1597,59 @@ restart_zpanel() {
 
     sleep 2
     if check_panel_health "$PANEL_PORT"; then
-        log_success "zPanel restarted successfully and is listening on port $PANEL_PORT."
+        log_success "NexoraPanel restarted successfully and is listening on port $PANEL_PORT."
     else
         log_warning "Restart executed. Check status with: pm2 status"
     fi
 }
 
 # ─────────────────────────────────────────────
-#  [6] UNINSTALL zPanel (Complete Removal)
+#  [6] UNINSTALL NexoraPanel (Complete Removal)
 # ─────────────────────────────────────────────
-uninstall_zpanel() {
-    print_banner
-    echo -e "  ${BOLD}${RED}UNINSTALL zPanel${NC}\n"
+uninstall_nexorapanel() {
+    print_system_header
+    echo -e "  ${BOLD}${RED}UNINSTALL NexoraPanel${NC}\n"
     log_divider
 
-    # ── Step 1: Detect the real zPanel installation directory ──
+    # ── Step 1: Detect the real NexoraPanel installation directory ──
     PANEL_DIR=""
     if [ -f "./package.json" ] && [ -f "./server.ts" ]; then
         PANEL_DIR="$(pwd)"
     elif [ -d "$DEFAULT_INSTALL_DIR" ] && [ -f "$DEFAULT_INSTALL_DIR/package.json" ]; then
         PANEL_DIR="$DEFAULT_INSTALL_DIR"
-    elif [ -d "$HOME/zpanel" ] && [ -f "$HOME/zpanel/package.json" ]; then
-        PANEL_DIR="$HOME/zpanel"
-    elif [ -d "./zPanel" ] && [ -f "./zPanel/package.json" ]; then
-        PANEL_DIR="$(pwd)/zPanel"
+    elif [ -d "$HOME/nexorapanel" ] && [ -f "$HOME/nexorapanel/package.json" ]; then
+        PANEL_DIR="$HOME/nexorapanel"
+    elif [ -d "./NexoraPanel" ] && [ -f "./NexoraPanel/package.json" ]; then
+        PANEL_DIR="$(pwd)/NexoraPanel"
     fi
 
     if [ -z "$PANEL_DIR" ]; then
-        log_error "zPanel installation was not found. Nothing to uninstall."
+        log_error "NexoraPanel installation was not found. Nothing to uninstall."
         return 1
     fi
 
-    # ── Safety: verify this is genuinely a zPanel install ──
+    # ── Safety: verify this is genuinely a NexoraPanel install ──
     if [ ! -f "$PANEL_DIR/package.json" ]; then
-        log_error "Cannot verify zPanel at $PANEL_DIR (no package.json). Refusing to delete an unverified path."
+        log_error "Cannot verify NexoraPanel at $PANEL_DIR (no package.json). Refusing to delete an unverified path."
         return 1
     fi
-    IS_ZPANEL=0
-    if grep -qiE "zpanel" "$PANEL_DIR/package.json" 2>/dev/null; then
-        IS_ZPANEL=1
+    IS_NEXORAPANEL=0
+    if grep -qiE "nexorapanel" "$PANEL_DIR/package.json" 2>/dev/null; then
+        IS_NEXORAPANEL=1
     fi
     if [ -f "$PANEL_DIR/server.ts" ] || [ -f "$PANEL_DIR/server.js" ]; then
-        IS_ZPANEL=1
+        IS_NEXORAPANEL=1
     fi
-    if [ "$IS_ZPANEL" -eq 0 ]; then
-        log_error "Path $PANEL_DIR does not appear to be a zPanel installation. Refusing to delete."
+    if [ "$IS_NEXORAPANEL" -eq 0 ]; then
+        log_error "Path $PANEL_DIR does not appear to be a NexoraPanel installation. Refusing to delete."
         return 1
     fi
 
-    log_info "Verified zPanel installation at: ${BOLD}$PANEL_DIR${NC}"
+    log_info "Verified NexoraPanel installation at: ${BOLD}$PANEL_DIR${NC}"
 
     # ── Step 2: Pre-uninstall inspection ──
     echo ""
-    log_step "Inspecting zPanel installation..."
+    log_step "Inspecting NexoraPanel installation..."
 
     # Detect panel config files
     PANEL_CONFIG_FILES=""
@@ -1495,7 +1657,7 @@ uninstall_zpanel() {
     [ -f "$PANEL_DIR/ecosystem.config.cjs" ] && PANEL_CONFIG_FILES="$PANEL_CONFIG_FILES $PANEL_DIR/ecosystem.config.cjs"
     [ -f "$PANEL_DIR/package.json" ] && PANEL_CONFIG_FILES="$PANEL_CONFIG_FILES $PANEL_DIR/package.json"
 
-    # Detect zPanel-owned database files
+    # Detect NexoraPanel-owned database files
     PANEL_DB_FILES=""
     if [ -d "$PANEL_DIR/.data" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/.data"; fi
     if [ -d "$PANEL_DIR/database" ]; then PANEL_DB_FILES="$PANEL_DB_FILES $PANEL_DIR/database"; fi
@@ -1503,12 +1665,12 @@ uninstall_zpanel() {
         [ -f "$db" ] && PANEL_DB_FILES="$PANEL_DB_FILES $db"
     done
 
-    # Detect zPanel-owned systemd services
+    # Detect NexoraPanel-owned systemd services
     PANEL_SYSTEMD_SVC=""
-    if [ -f /etc/systemd/system/zpanel.service ]; then
-        PANEL_SYSTEMD_SVC="zpanel"
-    elif systemctl list-unit-files 2>/dev/null | grep -qE "^zpanel\.service"; then
-        PANEL_SYSTEMD_SVC="zpanel"
+    if [ -f /etc/systemd/system/nexorapanel.service ]; then
+        PANEL_SYSTEMD_SVC="nexorapanel"
+    elif systemctl list-unit-files 2>/dev/null | grep -qE "^nexorapanel\.service"; then
+        PANEL_SYSTEMD_SVC="nexorapanel"
     fi
 
     # Detect Nova tunnel service (panel-owned temporary tunnel)
@@ -1519,11 +1681,11 @@ uninstall_zpanel() {
         NOVA_TUNNEL_SVC="nova-tunnel"
     fi
 
-    # Detect zPanel-specific reverse-proxy configs
+    # Detect NexoraPanel-specific reverse-proxy configs
     PANEL_PROXY_CONF=""
     for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* /etc/apache2/sites-enabled/* /etc/httpd/conf.d/*; do
         [ -f "$conf" ] || continue
-        if grep -qE "zpanel|6767|$PANEL_DIR" "$conf" 2>/dev/null; then
+        if grep -qE "nexorapanel|3001|$PANEL_DIR" "$conf" 2>/dev/null; then
             PANEL_PROXY_CONF="$PANEL_PROXY_CONF $conf"
         fi
     done
@@ -1537,7 +1699,7 @@ uninstall_zpanel() {
     # Detect Docker containers
     DOCKER_CONTAINERS=""
     if command -v docker &>/dev/null; then
-        for cname in zpanel zpanel-app zpanel-server; do
+        for cname in nexorapanel nexorapanel-app nexorapanel-server; do
             if $SUDO docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${cname}$"; then
                 DOCKER_CONTAINERS="$DOCKER_CONTAINERS $cname"
             fi
@@ -1575,9 +1737,9 @@ uninstall_zpanel() {
 
     # ── Uninstall mode selection ──
     echo -e "  ${BOLD}${YELLOW}SELECT UNINSTALL SCOPE:${NC}"
-    echo -e "    ${BOLD}[1]${NC} Remove zPanel application only (safest - default)"
-    echo -e "    ${BOLD}[2]${NC} Remove zPanel application and its database"
-    echo -e "    ${BOLD}[3]${NC} Remove zPanel application, database, and panel-managed server data"
+    echo -e "    ${BOLD}[1]${NC} Remove NexoraPanel application only (safest - default)"
+    echo -e "    ${BOLD}[2]${NC} Remove NexoraPanel application and its database"
+    echo -e "    ${BOLD}[3]${NC} Remove NexoraPanel application, database, and panel-managed server data"
     echo -e "    ${BOLD}[4]${NC} Cancel and return to installer menu"
     echo ""
     echo -ne "  Choose an option [1-4]: "
@@ -1609,13 +1771,13 @@ uninstall_zpanel() {
     echo -e "    • Ubuntu, SSH, and network configuration"
     echo -e "    • Unrelated applications, databases, and websites"
     echo ""
-    echo -e "  Type exactly: ${BOLD}UNINSTALL ZPANEL${NC}"
+    echo -e "  Type exactly: ${BOLD}UNINSTALL NEXORAPANEL${NC}"
     echo -e "  (Any other input cancels the operation.)"
     echo ""
     echo -ne "  Confirmation phrase: "
     read -r CONFIRM_PHRASE
 
-    if [ "$CONFIRM_PHRASE" != "UNINSTALL ZPANEL" ]; then
+    if [ "$CONFIRM_PHRASE" != "UNINSTALL NEXORAPANEL" ]; then
         log_info "Confirmation phrase did not match. Uninstall cancelled."
         return 0
     fi
@@ -1658,7 +1820,7 @@ uninstall_zpanel() {
 
     # ── Step 4: Stop panel processes safely ──
     echo ""
-    log_step "Stopping zPanel services..."
+    log_step "Stopping NexoraPanel services..."
 
     if [ "$PANEL_PM2_RUNNING" = "1" ] && command -v pm2 &>/dev/null; then
         log_info "Stopping PM2 process '$PM2_APP_NAME'..."
@@ -1675,14 +1837,14 @@ uninstall_zpanel() {
         log_info "PM2 process '$PM2_APP_NAME' not running or PM2 not found."
     fi
 
-    # ── Step 5: Remove zPanel-specific systemd service ──
+    # ── Step 5: Remove NexoraPanel-specific systemd service ──
     if [ -n "$PANEL_SYSTEMD_SVC" ]; then
-        log_step "Removing zPanel systemd service '$PANEL_SYSTEMD_SVC'..."
+        log_step "Removing NexoraPanel systemd service '$PANEL_SYSTEMD_SVC'..."
         $SUDO systemctl stop "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
         $SUDO systemctl disable "$PANEL_SYSTEMD_SVC" 2>/dev/null || true
         $SUDO rm -f "/etc/systemd/system/$PANEL_SYSTEMD_SVC.service" 2>/dev/null || true
         $SUDO systemctl daemon-reload 2>/dev/null || true
-        log_success "zPanel systemd service removed."
+        log_success "NexoraPanel systemd service removed."
     fi
 
     # ── Step 6: Remove Nova tunnel service (only if confirmed panel-owned) ──
@@ -1695,9 +1857,9 @@ uninstall_zpanel() {
         log_success "Nova tunnel service removed."
     fi
 
-    # ── Step 7: Remove zPanel-specific reverse-proxy configs ──
+    # ── Step 7: Remove NexoraPanel-specific reverse-proxy configs ──
     if [ -n "$PANEL_PROXY_CONF" ]; then
-        log_step "Removing zPanel reverse-proxy configurations..."
+        log_step "Removing NexoraPanel reverse-proxy configurations..."
         for conf in $PANEL_PROXY_CONF; do
             $SUDO rm -f "$conf" 2>/dev/null || true
         done
@@ -1718,7 +1880,7 @@ uninstall_zpanel() {
                 log_warning "Nginx configuration test failed. Nginx not reloaded."
             fi
         fi
-        log_success "zPanel reverse-proxy configurations removed."
+        log_success "NexoraPanel reverse-proxy configurations removed."
     fi
 
     # ── Step 8: Remove PM2 startup hook ──
@@ -1730,7 +1892,7 @@ uninstall_zpanel() {
     fi
 
     # ── Step 9: Remove application files ──
-    log_step "Removing zPanel application files from $PANEL_DIR..."
+    log_step "Removing NexoraPanel application files from $PANEL_DIR..."
     if [ -d "$PANEL_DIR" ]; then
         $SUDO rm -rf "$PANEL_DIR"
         log_success "Panel directory removed."
@@ -1739,7 +1901,7 @@ uninstall_zpanel() {
     # ── Step 10: Remove database (mode 2 and 3) ──
     if [ "$UNINSTALL_MODE" = "app_and_db" ] || [ "$UNINSTALL_MODE" = "app_db_and_servers" ]; then
         if [ -n "$PANEL_DB_FILES" ]; then
-            log_step "Removing zPanel database and panel data..."
+            log_step "Removing NexoraPanel database and panel data..."
             for item in $PANEL_DB_FILES; do
                 if [ -e "$item" ]; then
                     $SUDO rm -rf "$item" 2>/dev/null || true
@@ -1762,18 +1924,18 @@ uninstall_zpanel() {
         fi
     fi
 
-    # ── Step 12: Remove Docker containers (zPanel-owned only) ──
+    # ── Step 12: Remove Docker containers (NexoraPanel-owned only) ──
     if command -v docker &>/dev/null && [ -n "$DOCKER_CONTAINERS" ]; then
-        log_step "Removing zPanel-owned Docker containers..."
+        log_step "Removing NexoraPanel-owned Docker containers..."
         for cname in $DOCKER_CONTAINERS; do
             $SUDO docker rm -f "$cname" 2>/dev/null || true
         done
-        log_success "zPanel Docker containers removed."
+        log_success "NexoraPanel Docker containers removed."
     fi
 
     # ── Step 13: Clean up temporary installation files ──
     log_step "Cleaning up temporary installation files..."
-    $SUDO rm -rf /tmp/zpanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz /tmp/zpanel_node_install 2>/dev/null || true
+    $SUDO rm -rf /tmp/nexorapanel* /tmp/node22.tar.xz /tmp/jdk25.tar.gz /tmp/nexorapanel_node_install 2>/dev/null || true
     log_success "Temporary files cleaned."
 
     # ── Step 14: Verify removal ──
@@ -1789,13 +1951,13 @@ uninstall_zpanel() {
         VERIFY_OK=0
     fi
     if [ -n "$PANEL_SYSTEMD_SVC" ] && systemctl list-unit-files 2>/dev/null | grep -qE "^$PANEL_SYSTEMD_SVC\.service"; then
-        log_error "zPanel systemd service still present."
+        log_error "NexoraPanel systemd service still present."
         VERIFY_OK=0
     fi
 
     log_divider
     if [ "$VERIFY_OK" -eq 1 ]; then
-        echo -e "  ${GREEN}${BOLD}✔ zPanel has been completely uninstalled.${NC}"
+        echo -e "  ${GREEN}${BOLD}✔ NexoraPanel has been completely uninstalled.${NC}"
     else
         echo -e "  ${YELLOW}${BOLD}⚠ Uninstallation completed with warnings. Some items may remain.${NC}"
     fi
@@ -1806,72 +1968,74 @@ uninstall_zpanel() {
 }
 
 # ─────────────────────────────────────────────
-#  MAIN INTERACTIVE MENU LOOP (0-6)
+#  MAIN INTERACTIVE MENU LOOP
 # ─────────────────────────────────────────────
 while true; do
-    print_banner
-    echo -e "  ${BOLD}zPanel MANAGEMENT & INSTALLER${NC}"
+    print_system_header
+    echo -e "  ${BOLD}NexoraPanel MANAGEMENT & INSTALLER${NC}"
     echo ""
-    echo -e "    ${BOLD}[1]${NC} Install Panel (Node.js Only)"
-    echo -e "    ${BOLD}[2]${NC} Install Panel (Node.js + Docker Support)"
-    echo -e "    ${BOLD}[3]${NC} Install Panel (Development Mode)"
-    echo -e "    ${BOLD}[4]${NC} Update Panel"
-    echo -e "    ${BOLD}[5]${NC} Cloudflare Tunnel"
-    echo -e "    ${BOLD}[6]${NC} Create Admin User"
-    echo -e "    ${BOLD}[7]${NC} Restart Panel"
-    echo -e "    ${BOLD}${RED}[8]${NC} ${RED}Uninstall Panel${NC}"
+    echo -e "    ${BOLD}── Panel Manager ──${NC}"
+    echo -e "    ${BOLD}[1]${NC} Install Panel (Node.js + Docker Support)"
+    echo -e "    ${BOLD}[2]${NC} Update Panel"
+    echo -e "    ${BOLD}[3]${NC} Restart Panel"
+    echo -e "    ${BOLD}[4]${NC} Uninstall Panel"
+    echo ""
+    echo -e "    ${BOLD}── Node Manager ──${NC}"
+    echo -e "    ${BOLD}[5]${NC} Node Installation"
+    echo ""
+    echo -e "    ${BOLD}── Cloudflare Manager ──${NC}"
+    echo -e "    ${BOLD}[6]${NC} Cloudflare Tunnel"
+    echo ""
+    echo -e "    ${BOLD}── Admin ──${NC}"
+    echo -e "    ${BOLD}[7]${NC} Create Admin User"
+    echo ""
     echo -e "    ${BOLD}[0]${NC} Exit"
     echo ""
     log_divider
     echo -e "  \c"
-    read -p "Choose an option [0-8]: " MAIN_CHOICE
+    read -p "Choose an option [0-7]: " MAIN_CHOICE
 
     case "$MAIN_CHOICE" in
         1)
-            install_zpanel "nodejs"
+            install_nexorapanel "docker"
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         2)
-            install_zpanel "docker"
+            update_nexorapanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         3)
-            install_zpanel "dev"
+            restart_nexorapanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         4)
-            update_zpanel
+            uninstall_nexorapanel
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         5)
-            cloudflare_tunnel_option
+            node_installation
+            echo ""
+            read -p "  Press Enter to return to main menu..."
             ;;
         6)
-            create_admin_user
-            echo ""
-            read -p "  Press Enter to return to main menu..."
+            cloudflare_tunnel_option
             ;;
         7)
-            restart_zpanel
-            echo ""
-            read -p "  Press Enter to return to main menu..."
-            ;;
-        8)
-            uninstall_zpanel
+            create_admin_user
             echo ""
             read -p "  Press Enter to return to main menu..."
             ;;
         0)
             echo ""
-            echo -e "  ${CYAN}Exiting zPanel installer. Have a great day!${NC}\n"
+            echo -e "  ${CYAN}Exiting NexoraPanel installer. Have a great day!${NC}\n"
             exit 0
             ;;
         *)
-            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 0 and 8."
+            log_error "Invalid selection '$MAIN_CHOICE'. Please choose between 0 and 7."
             sleep 1
             ;;
     esac

@@ -13,14 +13,12 @@ import ServerList from "./pages/ServerList";
 import CreateServer from "./pages/CreateServer";
 import ServerView from "./pages/ServerView";
 import AccountPage from "./pages/AccountPage";
-import AdminSettingsPage from "./pages/AdminSettingsPage";
-import ApiKeysPage from "./pages/ApiKeysPage";
 import AdminServers from "./pages/AdminServers";
 import PlayitPage from "./pages/PlayitPage";
-import CloudflareTunnel from "./pages/CloudflareTunnel";
 import UsersPage from "./pages/UsersPage";
 import SettingsPage from "./pages/SettingsPage";
 import JavaRuntimeManager from "./pages/JavaRuntimeManager";
+import Nodes from "./pages/Nodes";
 import Layout from "./components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
@@ -63,13 +61,24 @@ const AnimatedRoutes = () => {
           <Route path="/servers/create" element={<ProtectedRoute><CreateServer /></ProtectedRoute>} />
           <Route path="/servers/:id/*" element={<ProtectedRoute><ServerView /></ProtectedRoute>} />
           <Route path="/admin/servers" element={<ProtectedRoute><AdminServers /></ProtectedRoute>} />
-          <Route path="/cloudflare" element={<ProtectedRoute><CloudflareTunnel /></ProtectedRoute>} />
+          <Route path="/admin/nodes" element={<ProtectedRoute><Nodes /></ProtectedRoute>} />
           <Route path="/playit" element={<ProtectedRoute><PlayitPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-          <Route path="/account" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/java-runtime" element={<ProtectedRoute><JavaRuntimeManager /></ProtectedRoute>} />
+
+          {/* Legacy/global feature URLs are server-scoped in zPanel. Send them
+              to the instance list instead of rendering an empty shell. */}
+          <Route path="/terminal" element={<Navigate to="/servers" replace />} />
+          <Route path="/files" element={<Navigate to="/servers" replace />} />
+          <Route path="/databases" element={<Navigate to="/servers" replace />} />
+          <Route path="/schedules" element={<Navigate to="/servers" replace />} />
+          <Route path="/backups" element={<Navigate to="/servers" replace />} />
+          <Route path="/network" element={<Navigate to="/servers" replace />} />
+          <Route path="/startup" element={<Navigate to="/servers" replace />} />
+          <Route path="/activity" element={<Navigate to="/servers" replace />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

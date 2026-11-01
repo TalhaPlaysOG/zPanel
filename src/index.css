@@ -1,53 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 /* =============================================================================
    ZPANEL DARK THEME DESIGN TOKENS
-   Inspired by Pterodactyl / Nebula aesthetic - dark navy, purple-gray surfaces,
-   blue accent, rounded corners, soft shadows
+   Inspired by dark purple aesthetic - deep purple surfaces, purple accent,
+   rounded corners, soft shadows
    ============================================================================= */
 
 :root {
-  /* ── Core backgrounds ── */
-  --zp-bg-deepest:  #070914;
-  --zp-bg-page:     #0a0c14;
-  --zp-bg-sidebar:  #0c0e18;
-  --zp-bg-card:     #111420;
-  --zp-bg-card-alt: #161a28;
-  --zp-bg-input:    #0d101a;
-  --zp-bg-hover:    rgba(130, 149, 255, 0.06);
-  --zp-bg-active:   rgba(130, 149, 255, 0.12);
+  /* â”€â”€ Core backgrounds â”€â”€ */
+  --zp-bg-deepest:  #050508;
+  --zp-bg-page:     #0a0a12;
+  --zp-bg-sidebar:  #0c0c14;
+  --zp-bg-card:     #11111a;
+  --zp-bg-card-alt: #161622;
+  --zp-bg-input:    #0e0e16;
+  --zp-bg-hover:    rgba(139, 92, 246, 0.06);
+  --zp-bg-active:   rgba(139, 92, 246, 0.12);
 
-  /* ── Primary accent (blue) ── */
-  --zp-primary-400: #8295ff;
-  --zp-primary-500: #6d83ff;
-  --zp-primary-600: #536afc;
-  --zp-primary-700: #3a4ef4;
-  --zp-primary-800: #2a3ed4;
+  /* â”€â”€ Primary accent (purple) â”€â”€ */
+  --zp-primary-400: #a78bfa;
+  --zp-primary-500: #8b5cf6;
+  --zp-primary-600: #7c3aed;
+  --zp-primary-700: #6d28d9;
+  --zp-primary-800: #5b21b6;
 
-  /* ── Text ── */
-  --zp-text-primary:   #f5f5fa;
-  --zp-text-secondary: #b5b3c2;
+  /* â”€â”€ Text â”€â”€ */
+  --zp-text-primary:   #f0f4ff;
+  --zp-text-secondary: #c7c7d4;
   --zp-text-muted:     #858394;
   --zp-text-dim:       #5a586c;
 
-  /* ── Borders ── */
-  --zp-border:        rgba(255, 255, 255, 0.06);
-  --zp-border-subtle: rgba(255, 255, 255, 0.03);
-  --zp-border-bright: rgba(130, 149, 255, 0.35);
-  --zp-border-focus:  rgba(130, 149, 255, 0.5);
+  /* â”€â”€ Borders â”€â”€ */
+  --zp-border:        rgba(255, 255, 255, 0.08);
+  --zp-border-subtle: rgba(255, 255, 255, 0.04);
+  --zp-border-bright: rgba(139, 92, 246, 0.35);
+  --zp-border-focus:  rgba(139, 92, 246, 0.5);
 
-  /* ── Status ── */
+  /* â”€â”€ Status â”€â”€ */
   --zp-success:  #36c98f;
   --zp-warning:  #e9b65b;
   --zp-danger:   #ed626f;
   --zp-info:     #66a6ff;
 
-  /* ── Shadows ── */
-  --zp-shadow-card:  0 4px 24px -4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
-  --zp-shadow-glow:  0 0 40px -12px rgba(130, 149, 255, 0.25);
-
-  /* ── Legacy compat tokens ── */
+  /* â”€â”€ Shadows â”€â”€ */
+  --zp-shadow-card:  0 4px 24px -4px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  --zp-shadow-glow:  0 0 40px -12px rgba(139, 92, 246, 0.25);
+  /* â”€â”€ Legacy compat tokens â”€â”€ */
   --bg-background: var(--zp-bg-page);
   --bg-card:       var(--zp-bg-card);
   --text-foreground: var(--zp-text-primary);
@@ -59,10 +58,10 @@
   --bg-muted: rgba(130, 149, 255, 0.05);
   --bg-muted-hover: rgba(130, 149, 255, 0.1);
 
-  /* ── Tailwind theme tokens ── */
-  --theme-100: #dbeafe;
-  --theme-200: #bfdbfe;
-  --theme-300: #93c5fd;
+  /* â”€â”€ Tailwind theme tokens â”€â”€ */
+  --theme-100: #eef2ff;
+  --theme-200: #dee2ff;
+  --theme-300: #c4b5fd;
   --theme-400: var(--zp-primary-400);
   --theme-500: var(--zp-primary-500);
   --theme-600: var(--zp-primary-600);
@@ -70,11 +69,11 @@
   --theme-800: var(--zp-primary-800);
   --theme-900: #1e1e3a;
   --theme-950: #0f0f2a;
-  --theme-rgb-500: 109, 131, 255;
-  --theme-rgb-600: 83, 106, 252;
+  --theme-rgb-500: 139, 92, 246;
+  --theme-rgb-600: 124, 58, 237;
 }
 
-/* ── Theme mapping for Tailwind ── */
+/* â”€â”€ Theme mapping for Tailwind â”€â”€ */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -109,6 +108,51 @@
   --color-line:  var(--zp-border);
   --color-dim:   var(--zp-text-muted);
   --color-faint: var(--zp-text-dim);
+
+  /* ---------------------------------------------------------------------
+     zPanel palette aliases.
+     Components use utilities such as bg-zp-bg-page, text-zp-text-muted,
+     border-zp-border and bg-zp-primary-600. Those only exist in the
+     generated stylesheet when the matching --color-* token is declared
+     here, so keep this block in sync with the component classes.
+     --------------------------------------------------------------------- */
+  --color-zp-bg-page: var(--zp-bg-page);
+  --color-zp-bg-deepest: var(--zp-bg-deepest);
+  --color-zp-bg-sidebar: var(--zp-bg-sidebar);
+  --color-zp-bg-card: var(--zp-bg-card);
+  --color-zp-bg-card-alt: var(--zp-bg-card-alt);
+  --color-zp-bg-input: var(--zp-bg-input);
+  --color-zp-bg-hover: var(--zp-bg-hover);
+  --color-zp-bg-active: var(--zp-bg-active);
+  --color-zp-sidebar: var(--zp-bg-sidebar);
+
+  --color-zp-text-primary: var(--zp-text-primary);
+  --color-zp-text-secondary: var(--zp-text-secondary);
+  --color-zp-text-muted: var(--zp-text-muted);
+  --color-zp-text-dim: var(--zp-text-dim);
+
+  --color-zp-border: var(--zp-border);
+  --color-zp-border-subtle: var(--zp-border-subtle);
+  --color-zp-border-bright: var(--zp-border-bright);
+  --color-zp-border-focus: var(--zp-border-focus);
+
+  --color-zp-primary-300: #c4b5fd;
+  --color-zp-primary-400: var(--zp-primary-400);
+  --color-zp-primary-500: var(--zp-primary-500);
+  --color-zp-primary-600: var(--zp-primary-600);
+  --color-zp-primary-700: var(--zp-primary-700);
+  --color-zp-primary-800: var(--zp-primary-800);
+
+  --color-zp-success: var(--zp-success);
+  --color-zp-warning: var(--zp-warning);
+  --color-zp-danger: var(--zp-danger);
+  --color-zp-danger-500: #f27b86;
+  --color-zp-danger-600: #d94a57;
+  --color-zp-info: var(--zp-info);
+  --color-zp-info-500: #4d92ff;
+
+  --shadow-zp-shadow-card: var(--zp-shadow-card);
+  --shadow-zp-shadow-glow: var(--zp-shadow-glow);
 }
 
 /* =============================================================================
@@ -197,7 +241,7 @@ input[type=number] { -moz-appearance: textfield; }
    ZPANEL UI COMPONENTS
    ============================================================================= */
 
-/* ── Cards ── */
+/* â”€â”€ Cards â”€â”€ */
 .zp-card {
   background: var(--zp-bg-card);
   border: 1px solid var(--zp-border);
@@ -212,10 +256,10 @@ input[type=number] { -moz-appearance: textfield; }
   box-shadow: var(--zp-shadow-card);
 }
 
-/ ── Primary Button ── */
+/* â”€â”€ Primary Button â”€â”€ */
 .zp-btn-primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  background: var(--zp-primary-600);
+  background: linear-gradient(135deg, var(--zp-primary-500), var(--zp-primary-700));
   color: #fff;
   font-weight: 600;
   font-size: 0.875rem;
@@ -223,16 +267,18 @@ input[type=number] { -moz-appearance: textfield; }
   border-radius: 0.625rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 0 24px -6px rgba(139, 92, 246, 0.3);
 }
 .zp-btn-primary:hover:not(:disabled) {
-  background: var(--zp-primary-700);
+  background: linear-gradient(135deg, var(--zp-primary-600), var(--zp-primary-700));
   border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 32px -4px rgba(139, 92, 246, 0.5);
 }
 .zp-btn-primary:active:not(:disabled) { transform: scale(0.97); }
 .zp-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/ ── Ghost Button ── */
+/* â”€â”€ Ghost Button â”€â”€ */
 .zp-btn-ghost {
   display: inline-flex; align-items: center; gap: 0.5rem;
   background: var(--zp-bg-card-alt);
@@ -253,27 +299,29 @@ input[type=number] { -moz-appearance: textfield; }
 .zp-btn-ghost:active:not(:disabled) { transform: scale(0.97); }
 .zp-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/ ── Danger Button ── */
+/* â”€â”€ Danger Button â”€â”€ */
 .zp-btn-danger {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  background: rgba(237, 98, 111, 0.1);
-  color: var(--zp-danger);
+  background: linear-gradient(135deg, var(--zp-primary-500), var(--zp-primary-700));
+  color: #fff;
   font-weight: 600;
   font-size: 0.875rem;
   padding: 0.625rem 1.25rem;
   border-radius: 0.625rem;
-  border: 1px solid rgba(237, 98, 111, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 0 24px -6px rgba(139, 92, 246, 0.3);
 }
 .zp-btn-danger:hover:not(:disabled) {
-  background: rgba(237, 98, 111, 0.2);
-  border-color: rgba(237, 98, 111, 0.4);
+  background: linear-gradient(135deg, var(--zp-primary-600), var(--zp-primary-700));
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 32px -4px rgba(139, 92, 246, 0.5);
 }
 .zp-btn-danger:active:not(:disabled) { transform: scale(0.97); }
 .zp-btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/ ── Status badges ── */
+/* â”€â”€ Status badges â”€â”€ */
 .zp-badge {
   display: inline-flex; align-items: center; gap: 0.375rem;
   padding: 0.2rem 0.65rem;
@@ -288,8 +336,9 @@ input[type=number] { -moz-appearance: textfield; }
 .zp-badge-info    { background: rgba(102, 166, 255, 0.12); color: #66a6ff; border: 1px solid rgba(102, 166, 255, 0.25); }
 .zp-badge-primary { background: rgba(109, 131, 255, 0.12); color: #8295ff; border: 1px solid rgba(109, 131, 255, 0.25); }
 
-/ ── Nav link (sidebar) ── */
+/* â”€â”€ Nav link (sidebar) â”€â”€ */
 .zp-nav-link {
+  position: relative;
   display: flex; align-items: center; gap: 0.75rem;
   padding: 0.625rem 0.75rem;
   border-radius: 0.625rem;
@@ -300,6 +349,7 @@ input[type=number] { -moz-appearance: textfield; }
   transition: color 0.15s, background 0.15s, border-color 0.15s;
   text-decoration: none;
   cursor: pointer;
+  min-height: 38px;
 }
 .zp-nav-link:hover {
   color: var(--zp-text-primary);
@@ -307,8 +357,8 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .zp-nav-link.active {
   color: #ffffff;
-  background: rgba(130, 149, 255, 0.15);
-  border-color: rgba(130, 149, 255, 0.3);
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.3);
 }
 
 .zp-nav-link.active::before {
@@ -319,7 +369,7 @@ input[type=number] { -moz-appearance: textfield; }
   border-radius: 0 3px 3px 0;
 }
 
-/ ── Table ── */
+/* â”€â”€ Table â”€â”€ */
 .zp-table { width: 100%; border-collapse: collapse; }
 .zp-table th {
   padding: 0.625rem 1rem;
@@ -340,7 +390,7 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .zp-table tr:hover td { background: var(--zp-bg-hover); }
 
-/ ── Section header ── */
+/* â”€â”€ Section header â”€â”€ */
 .zp-section-title {
   font-size: 0.6875rem;
   font-weight: 700;
@@ -350,14 +400,14 @@ input[type=number] { -moz-appearance: textfield; }
   margin-bottom: 0.75rem;
 }
 
-/ ── Divider ── */
+/* â”€â”€ Divider â”€â”€ */
 .zp-divider {
   height: 1px;
   background: var(--zp-border-subtle);
   margin: 0.75rem 0;
 }
 
-/ ── Input Group ── */
+/* â”€â”€ Input Group â”€â”€ */
 .zp-input-group { position: relative; }
 .zp-input-group input { padding-left: 2.5rem; }
 .zp-input-group .zp-input-icon {
@@ -366,14 +416,14 @@ input[type=number] { -moz-appearance: textfield; }
   width: 1rem; height: 1rem;
 }
 
-/ ── Glass effect ── */
+/* â”€â”€ Glass effect â”€â”€ */
 .zp-glass {
   background: rgba(10, 12, 20, 0.8);
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
 }
 
-/ ── Glow dot ── */
+/* â”€â”€ Glow dot â”€â”€ */
 .zp-pulse-dot {
   display: inline-block;
   width: 0.5rem; height: 0.5rem;
@@ -388,7 +438,7 @@ input[type=number] { -moz-appearance: textfield; }
   100% { box-shadow: 0 0 0 0 rgba(54, 201, 143, 0); }
 }
 
-/ ── Gradient text ── */
+/* â”€â”€ Gradient text â”€â”€ */
 .zp-gradient-text {
   background: linear-gradient(135deg, #8295ff 0%, #38bdf8 100%);
   -webkit-background-clip: text;
@@ -396,22 +446,22 @@ input[type=number] { -moz-appearance: textfield; }
   background-clip: text;
 }
 
-/ ── Background glow ── */
+/* â”€â”€ Background glow â”€â”€ */
 .zp-bg-glow::before {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 60% 50% at 80% 0%, rgba(130, 149, 255, 0.06) 0%, transparent 60%);
+    radial-gradient(ellipse 60% 50% at 80% 0%, rgba(139, 92, 246, 0.06) 0%, transparent 60%);
 }
 
-/ ── Card hover lift ── */
+/* â”€â”€ Card hover lift â”€â”€ */
 .zp-card-lift { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease; }
 .zp-card-lift:hover {
   transform: translateY(-3px);
   box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(130, 149, 255, 0.15);
 }
 
-/ ── Modal ── */
+/* â”€â”€ Modal â”€â”€ */
 .zp-modal-overlay { animation: zp-fade-in 0.18s ease-out; }
 .zp-modal-content { animation: zp-fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
 
@@ -431,23 +481,27 @@ input[type=number] { -moz-appearance: textfield; }
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/ ── Button base ── */
-button:not(:disabled) {
-  position: relative;
-  overflow: hidden;
+/* â”€â”€ Button base â”€â”€ */
+/* Kept in the base layer so Tailwind utilities (absolute, overflow-visible, …)
+   can override these defaults instead of being silently defeated. */
+@layer base {
+  button:not(:disabled) {
+    position: relative;
+    overflow: hidden;
+  }
+  button:not(:disabled):active { transform: scale(0.97); }
 }
-button:not(:disabled):active { transform: scale(0.97); }
 
-/ ── Progress bar ── */
+/* â”€â”€ Progress bar â”€â”€ */
 .zp-progress-bar {
   height: 4px;
-  background: linear-gradient(90deg, var(--zp-primary-600), #38bdf8);
-  box-shadow: 0 0 10px rgba(130, 149, 255, 0.5);
+  background: linear-gradient(90deg, var(--zp-primary-500), var(--zp-primary-700));
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
   border-radius: 999px;
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/ ── Auth styles ── */
+/* â”€â”€ Auth styles â”€â”€ */
 .zp-auth-wrapper {
   min-height: 100dvh;
   width: 100%;
@@ -471,7 +525,7 @@ button:not(:disabled):active { transform: scale(0.97); }
   animation: zp-fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/ ── Server deploy wizard ── */
+/* â”€â”€ Server deploy wizard â”€â”€ */
 .zp-deploy-wrapper {
   background: var(--zp-bg-deepest);
   color: var(--zp-text-primary);
@@ -509,7 +563,7 @@ button:not(:disabled):active { transform: scale(0.97); }
   color: #ffffff;
 }
 
-/ ── Selection card ── */
+/* â”€â”€ Selection card â”€â”€ */
 .zp-sel-card {
   position: relative;
   background: var(--zp-bg-input);
@@ -543,11 +597,11 @@ button:not(:disabled):active { transform: scale(0.97); }
   opacity: 1; transform: scale(1);
 }
 
-/ ── Utilities ── */
+/* â”€â”€ Utilities â”€â”€ */
 .zp-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zp-font-mono { font-family: "JetBrains Mono", monospace; }
 
-/ ── Legacy compat (keep existing classes working) ── */
+/* â”€â”€ Legacy compat (keep existing classes working) â”€â”€ */
 .nb-card, .nb-btn-primary, .nb-btn-ghost, .nb-badge, .nb-nav-link, .nb-table,
 .nb-section-title, .nb-divider, .nb-input-group, .nb-glass, .nb-pulse-dot,
 .nb-gradient-text, .nb-bg-glow, .nb-progress-bar, .nb-auth-wrapper, .nb-auth-card,
@@ -555,7 +609,7 @@ button:not(:disabled):active { transform: scale(0.97); }
   /* kept for backward compatibility - new code uses zp-* classes */
 }
 
-/ ── Transparency overrides (background image mode) ── */
+/* â”€â”€ Transparency overrides (background image mode) â”€â”€ */
 :root.has-bg-image {
   --zp-bg-page: transparent;
   --zp-bg-card: rgba(17, 20, 32, 0.7);

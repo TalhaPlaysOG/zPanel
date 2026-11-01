@@ -967,7 +967,7 @@ export default function AdminSettingsPage(): React.ReactElement {
                     <div className="flex flex-wrap gap-3">
                       {[
                         { name: "red", color: "#ef4444" },
-                        { name: "blue", color: "#3b82f6" },
+                        { name: "blue", color: "#8b5cf6" },
                         { name: "orange", color: "#f97316" },
                         { name: "green", color: "#10b981" },
                         { name: "white", color: "#e4e4e7" }

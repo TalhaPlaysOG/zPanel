@@ -218,7 +218,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 6767;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 app.use(express.json({ limit: "50gb" }));
 app.use(express.urlencoded({ extended: true, limit: "50gb" }));
@@ -247,7 +247,7 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`zPanel running on port ${PORT}`);
+    console.log(`NexoraPanel running on port ${PORT}`);
   });
 }
 

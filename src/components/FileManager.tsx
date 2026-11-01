@@ -754,7 +754,7 @@ export default function FileManager({ serverId }: { serverId: string }) {
 
                               <button
                                 onClick={(e) => { e.stopPropagation(); openRenameModal(f); }}
-                                className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-blue-600/20 hover:text-blue-300 flex items-center gap-2.5 transition-colors"
+                                className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-theme-600/20 hover:text-theme-300 flex items-center gap-2.5 transition-colors"
                               >
                                 <Edit2 size={14} className="text-zinc-400" />
                                 <span>Rename {f.isDirectory ? "Folder" : "File"}</span>
@@ -1057,7 +1057,7 @@ export default function FileManager({ serverId }: { serverId: string }) {
                   </button>
                 )}
                 {activeModal === "rename" && (
-                  <button onClick={submitRename} className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md">
+                  <button onClick={submitRename} className="px-4 py-2 rounded-xl text-xs font-semibold bg-theme-600 hover:bg-theme-700 text-white transition-all shadow-md">
                     Rename
                   </button>
                 )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Search, Server, LayoutDashboard, Plus, Settings, Key, User, Activity, X, ChevronRight, Terminal, ArrowRight, CornerDownLeft } from "lucide-react";
+import { Search, Server, LayoutDashboard, Plus, Settings, User, Activity, X, ChevronRight, Terminal, ArrowRight, CornerDownLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -61,14 +61,6 @@ const STATIC_NAV_LINKS: QuickLink[] = [
     category: "Navigation",
     icon: <User className="w-4 h-4 text-theme-700" />,
     path: "/account"
-  },
-  {
-    id: "nav-apikeys",
-    title: "API Keys",
-    subtitle: "Manage external API access tokens",
-    category: "Navigation",
-    icon: <Key className="w-4 h-4 text-pink-400" />,
-    path: "/api-keys"
   }
 ];
 
